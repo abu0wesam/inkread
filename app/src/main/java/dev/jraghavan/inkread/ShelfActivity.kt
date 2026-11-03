@@ -27,6 +27,11 @@ import java.io.File
  * are decoded, since a list on a panel that repaints in whole frames wants text.
  */
 class ShelfActivity : Activity() {
+    override fun onPostCreate(savedInstanceState: android.os.Bundle?) {
+        super.onPostCreate(savedInstanceState)
+        ArabicUi.addBack(this)
+    }
+
     override fun attachBaseContext(newBase: android.content.Context) = super.attachBaseContext(ArabicUi.wrap(newBase))
 
 

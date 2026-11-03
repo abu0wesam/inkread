@@ -194,8 +194,20 @@ class ReaderActivity : Activity(), SurfaceHolder.Callback {
         override val docHandle get() = this@ReaderActivity.docHandle
         override val prefs get() = displayPrefs
         override fun startManualCrop() = this@ReaderActivity.startManualCrop()
+        override fun autoCrop(on: Boolean) {
+            engine.execute {
+                lastCropRect = null
+                try {
+                    NativeBridge.nativeSetCropRect(docHandle, 0f, 0f, 0f, 0f)
+                    NativeBridge.nativeSetCrop(docHandle, if (on) 1 else 0, displayPrefs.cropMargin)
+                } catch (e: RuntimeException) {}
+                repaintPanel()
+            }
+        }
         override fun clearManualCrop() {
             engine.execute {
+                try { NativeBridge.nativeSetCrop(docHandle, 0, 0); NativeBridge.nativeSetCropExtra(docHandle, 0, 0) } catch (e: RuntimeException) {}
+                lastCropRect = null
                 try { NativeBridge.nativeSetCropRect(docHandle, 0f, 0f, 0f, 0f) } catch (e: RuntimeException) {}
                 repaintPanel()
             }
@@ -600,6 +612,7 @@ class ReaderActivity : Activity(), SurfaceHolder.Callback {
         stylus.penWidthIndex = prefs
             .getInt(KEY_PEN_WIDTH, StylusInkController.DEFAULT_PEN_WIDTH_INDEX)
             .coerceIn(0, StylusInkController.PEN_WIDTHS.size - 1)
+        stylus.eraseRadiusPx = prefs.getFloat("erase_radius", StylusInkController.ERASE_RADIUS_PX)
         stylus.smoothWidthIndex = prefs
             .getInt(KEY_SMOOTH_WIDTH, StylusInkController.DEFAULT_SMOOTH_INDEX)
             .coerceIn(0, StylusInkController.SMOOTH_WIDTHS.size - 1)
@@ -1180,6 +1193,7 @@ class ReaderActivity : Activity(), SurfaceHolder.Callback {
      *  changed, show it" path (engine thread). Page turns instead drive the policy's command
      *  stream via [dev.jraghavan.inkread.eink.EinkAdapter.executeAll]. */
     private fun repaintPanel() {
+        liveSent = 0
         renderAndBlit()
         refreshPanel()
     }
@@ -1379,6 +1393,7 @@ class ReaderActivity : Activity(), SurfaceHolder.Callback {
      * the hit-test is the normalized tap `(x/w, y/h)` against the link rects.
      */
     private var rootView: FrameLayout? = null
+    private var lastCropRect: android.graphics.RectF? = null
 
     /**
      * Manual crop: show the whole page uncropped, let the reader drag a rectangle over it, and on
@@ -1394,11 +1409,22 @@ class ReaderActivity : Activity(), SurfaceHolder.Callback {
             } catch (e: RuntimeException) {}
             repaintPanel()
             runOnUiThread {
-                ManualCropOverlay.show(this, root) { r ->
+                ManualCropOverlay.show(this, root) { mode, rect ->
                     engine.execute {
                         try {
-                            if (r != null) NativeBridge.nativeSetCropRect(docHandle, r.left, r.top, r.right, r.bottom)
-                            NativeBridge.nativeSetCrop(docHandle, if (displayPrefs.cropAuto) 1 else 0, displayPrefs.cropMargin)
+                            when (mode) {
+                                1 -> {
+                                    val q = rect!!
+                                    NativeBridge.nativeSetCropRect(docHandle, q.left, q.top, q.right, q.bottom)
+                                    lastCropRect = q
+                                    displayPrefs.cropAuto = false
+                                }
+                                2 -> { lastCropRect = null; displayPrefs.cropAuto = true }
+                                3 -> { lastCropRect = null; displayPrefs.cropAuto = false; displayPrefs.cropSide = 0; displayPrefs.cropVert = 0 }
+                                else -> lastCropRect?.let { NativeBridge.nativeSetCropRect(docHandle, it.left, it.top, it.right, it.bottom) }
+                            }
+                            val auto = if (displayPrefs.cropAuto) 1 else 0
+                            NativeBridge.nativeSetCrop(docHandle, auto, displayPrefs.cropMargin)
                             NativeBridge.nativeSetCropExtra(docHandle, displayPrefs.cropSide, displayPrefs.cropVert)
                         } catch (e: RuntimeException) {}
                         repaintPanel()
@@ -1570,6 +1596,15 @@ class ReaderActivity : Activity(), SurfaceHolder.Callback {
         if (chosen == Tool.HIGHLIGHTER && tool == Tool.HIGHLIGHTER) {
             if (toolOptions.isShowing()) collapseToolOptions()
             else openToolOptions("قلم التظليل", HIGHLIGHT_COLORS, HIGHLIGHT_COLOR_NAMES, stylus.hlColorIndex) { stylus.hlColorIndex = it }
+            return true
+        }
+        if (chosen == Tool.ERASER && tool == Tool.ERASER) {
+            android.app.AlertDialog.Builder(this)
+                .setTitle("حجم الممحاة")
+                .setItems(StylusInkController.ERASE_SIZE_NAMES) { _, i ->
+                    stylus.eraseRadiusPx = StylusInkController.ERASE_SIZES[i]
+                    prefs.edit().putFloat("erase_radius", stylus.eraseRadiusPx).apply()
+                }.show()
             return true
         }
         if (chosen == Tool.SMOOTH && tool == Tool.SMOOTH) {
@@ -1868,6 +1903,7 @@ class ReaderActivity : Activity(), SurfaceHolder.Callback {
     /** Wipe the firmware ink overlay (engine thread) — used after a non-pen gesture so its transient
      *  ink doesn't linger over the page. Safe: real strokes are baked from the core on re-render. */
     private fun clearFirmwareInk() {
+        liveSent = 0
         ink.clearAll()
     }
 
@@ -1879,16 +1915,47 @@ class ReaderActivity : Activity(), SurfaceHolder.Callback {
      */
     private fun drawLivePath(buf: ArrayList<Float>, paint: Paint) {
         val bmp = bitmap ?: return
-        if (buf.size < 4) return
-        blit { canvas ->
-            canvas.drawBitmap(bmp, 0f, 0f, null)
-            val path = Path()
-            path.moveTo(buf[0], buf[1])
-            var i = 2
-            while (i + 1 < buf.size) { path.lineTo(buf[i], buf[i + 1]); i += 2 }
-            canvas.drawPath(path, paint)
+        val n = buf.size / 2
+        if (n < 2) return
+        fun tracePath(from: Int, to: Int): Path = Path().apply {
+            moveTo(buf[from * 2], buf[from * 2 + 1])
+            for (i in from + 1..to) lineTo(buf[i * 2], buf[i * 2 + 1])
         }
+        if (liveSent == 0 || n < liveSent) {
+            // First segment of a stroke: lay the page down once.
+            blit { canvas ->
+                canvas.drawBitmap(bmp, 0f, 0f, null)
+                canvas.drawPath(tracePath(0, n - 1), paint)
+            }
+            liveSent = n
+            return
+        }
+        // Later segments: repaint only the small window around the new points (page + the last few
+        // points of the stroke), so the cost per pen move stays constant however long the line is.
+        val from = maxOf(0, liveSent - 2)
+        var minX = Float.MAX_VALUE; var minY = Float.MAX_VALUE; var maxX = -Float.MAX_VALUE; var maxY = -Float.MAX_VALUE
+        for (i in from until n) {
+            minX = minOf(minX, buf[i * 2]); maxX = maxOf(maxX, buf[i * 2])
+            minY = minOf(minY, buf[i * 2 + 1]); maxY = maxOf(maxY, buf[i * 2 + 1])
+        }
+        val pad = paint.strokeWidth + 12f
+        val dirty = android.graphics.Rect(
+            (minX - pad).toInt().coerceAtLeast(0), (minY - pad).toInt().coerceAtLeast(0),
+            (maxX + pad).toInt().coerceAtMost(bmp.width), (maxY + pad).toInt().coerceAtMost(bmp.height),
+        )
+        val holder = surfaceView.holder
+        val canvas = try { holder.lockCanvas(dirty) ?: return } catch (_: IllegalStateException) { return }
+        try {
+            canvas.drawBitmap(bmp, 0f, 0f, null) // clipped to [dirty] by the lock
+            canvas.drawPath(tracePath(maxOf(0, from - 60), n - 1), paint)
+        } finally {
+            runCatching { holder.unlockCanvasAndPost(canvas) }
+        }
+        liveSent = n
     }
+
+    /** Points of the current stroke already painted by [drawLivePath]. */
+    private var liveSent = 0
 
     /** Toggle PDF reflow (ADR-INKREAD-0011). On enable, re-apply the saved typography so the
      *  reflowed PDF respects the user's font size / spacing / alignment; the page count and position

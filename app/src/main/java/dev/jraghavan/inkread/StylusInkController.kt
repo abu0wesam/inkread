@@ -205,6 +205,9 @@ class StylusInkController(private val host: Host) {
     /** True while a stylus stroke is mid-capture (drives palette state + finger palm gating). */
     val strokeInProgress: Boolean get() = strokeBuf.isNotEmpty()
 
+    /** Eraser reach in view px (chosen from [ERASE_SIZES]). */
+    var eraseRadiusPx = ERASE_RADIUS_PX
+
     /** Selected width of the smooth pen (index into [SMOOTH_WIDTHS]). */
     var smoothWidthIndex = DEFAULT_SMOOTH_INDEX
     val smoothWidthPx: Float get() = SMOOTH_WIDTHS.getOrElse(smoothWidthIndex) { SMOOTH_WIDTHS[DEFAULT_SMOOTH_INDEX] }
@@ -415,7 +418,7 @@ class StylusInkController(private val host: Host) {
     private fun commitErase(viewPts: FloatArray) {
         val w = host.viewW; val h = host.viewH
         if (host.docHandle != 0L && w != 0 && h != 0) {
-            val radiusNorm = host.lenToNorm(ERASE_RADIUS_PX)
+            val radiusNorm = host.lenToNorm(eraseRadiusPx)
             try {
                 NativeBridge.nativeInkBeginStroke(host.docHandle, ReaderActivity.CORE_TOOL_ERASER, ReaderActivity.INK_COLOR_BLACK, radiusNorm, System.currentTimeMillis())
                 NativeBridge.nativeInkAddPoints(host.docHandle, toNormPoints(viewPts))
@@ -471,7 +474,9 @@ class StylusInkController(private val host: Host) {
         const val SMOOTH_RADIUS_PX = 28f
 
         const val HIGHLIGHT_WIDTH_PX = 30f // wide marker band (vs the pen's PEN_WIDTHS).
-        const val ERASE_RADIUS_PX = 22f // eraser hit radius (px): a stroke within this of the path goes.
+        const val ERASE_RADIUS_PX = 22f
+        val ERASE_SIZES = floatArrayOf(14f, 22f, 36f, 56f)
+        val ERASE_SIZE_NAMES = arrayOf("صغيرة", "متوسطة", "كبيرة", "واسعة") // eraser hit radius (px): a stroke within this of the path goes.
         const val ERASE_TRAIL_PX = 5f // live eraser dotted-trail width (px): thin, so it barely ghosts (#253).
         const val ERASE_DASH_ON = 10f // eraser dash length (px).
         const val ERASE_DASH_OFF = 10f // eraser gap between dashes (px).

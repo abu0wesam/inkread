@@ -34,6 +34,11 @@ import java.util.concurrent.Executors
  * library.
  */
 class OpdsActivity : Activity() {
+    override fun onPostCreate(savedInstanceState: android.os.Bundle?) {
+        super.onPostCreate(savedInstanceState)
+        ArabicUi.addBack(this)
+    }
+
     override fun attachBaseContext(newBase: android.content.Context) = super.attachBaseContext(ArabicUi.wrap(newBase))
 
 

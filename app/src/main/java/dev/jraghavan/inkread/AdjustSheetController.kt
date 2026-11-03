@@ -58,6 +58,8 @@ class AdjustSheetController(private val host: Host) {
 
         fun clearManualCrop()
 
+        fun autoCrop(on: Boolean)
+
         /** Engine thread only: re-read the page count after a repagination. */
         fun refreshPageCount()
 
@@ -374,14 +376,6 @@ class AdjustSheetController(private val host: Host) {
     /** The "Crop" tab: Page Crop (None/Auto) + a Margin cell bar (margin kept around the content). */
     private fun cropPanel(): View {
         val container = LinearLayout(activity).apply { orientation = LinearLayout.VERTICAL }
-        container.addView(settingRow("اقتصاص الصفحة", segmented(listOf("بدون", "تلقائي"), if (prefs.cropAuto) 1 else 0) { which ->
-            prefs.cropAuto = which == 1
-            host.diag { "DIAG crop auto=${which == 1}" }
-            host.engineExecute {
-                try { NativeBridge.nativeSetCrop(host.docHandle, which, prefs.cropMargin) } catch (e: RuntimeException) {}
-                host.repaintPanel()
-            }
-        }))
         container.addView(settingRow("الهامش", cellBar(8, prefs.cropMargin) { level ->
             prefs.cropMargin = level
             host.diag { "DIAG crop margin=$level" }
@@ -398,9 +392,13 @@ class AdjustSheetController(private val host: Host) {
             prefs.cropVert = level
             applyExtraCrop()
         }))
-        container.addView(settingRow("تحديد يدوي", segmented(listOf("تحديد المنطقة", "إزالة"), -1) { which ->
+        container.addView(settingRow("اقتصاص", segmented(listOf("ضبط الحواف", "تلقائي", "استعادة"), -1) { which ->
             shownDialog?.dismiss()
-            if (which == 0) host.startManualCrop() else host.clearManualCrop()
+            when (which) {
+                0 -> host.startManualCrop()
+                1 -> { prefs.cropAuto = true; host.autoCrop(true) }
+                else -> { prefs.cropAuto = false; prefs.cropSide = 0; prefs.cropVert = 0; host.clearManualCrop() }
+            }
         }))
         return container
     }

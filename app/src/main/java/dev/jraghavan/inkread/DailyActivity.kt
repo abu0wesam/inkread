@@ -35,6 +35,11 @@ import java.util.Locale
  * compiled issue, the populated front page.
  */
 class DailyActivity : Activity() {
+    override fun onPostCreate(savedInstanceState: android.os.Bundle?) {
+        super.onPostCreate(savedInstanceState)
+        ArabicUi.addBack(this)
+    }
+
     override fun attachBaseContext(newBase: android.content.Context) = super.attachBaseContext(ArabicUi.wrap(newBase))
 
 

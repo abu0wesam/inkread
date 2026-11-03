@@ -34,4 +34,22 @@ object ArabicUi {
             // Keep the system faces.
         }
     }
+
+    /** Adds a bold floating "رجوع" button (bottom-left) that closes the screen. */
+    fun addBack(a: android.app.Activity) {
+        val decor = a.window.decorView as? android.widget.FrameLayout ?: return
+        if (decor.findViewWithTag<android.view.View>("ink_back") != null) return
+        val d = a.resources.displayMetrics.density
+        decor.addView(
+            android.widget.TextView(a).apply {
+                tag = "ink_back"; text = "→ رجوع"; textSize = Ink.sp(20f); typeface = Ink.serifBold
+                setTextColor(android.graphics.Color.WHITE); setBackgroundColor(android.graphics.Color.BLACK)
+                setPadding((18 * d).toInt(), (10 * d).toInt(), (18 * d).toInt(), (10 * d).toInt())
+                setOnClickListener { a.onBackPressed() }
+            },
+            android.widget.FrameLayout.LayoutParams(-2, -2, android.view.Gravity.BOTTOM or android.view.Gravity.LEFT).apply {
+                setMargins((16 * d).toInt(), 0, 0, (16 * d).toInt())
+            },
+        )
+    }
 }

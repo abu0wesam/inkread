@@ -20,6 +20,11 @@ import android.widget.TextView
  * Views, like the rest of the shell; backed by [AppSettings].
  */
 class SettingsActivity : Activity() {
+    override fun onPostCreate(savedInstanceState: android.os.Bundle?) {
+        super.onPostCreate(savedInstanceState)
+        ArabicUi.addBack(this)
+    }
+
     override fun attachBaseContext(newBase: android.content.Context) = super.attachBaseContext(ArabicUi.wrap(newBase))
 
 

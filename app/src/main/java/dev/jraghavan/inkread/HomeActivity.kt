@@ -90,6 +90,27 @@ class HomeActivity : Activity() {
         }
     }
 
+    private var downX = 0f
+    private var downY = 0f
+    private var lastPages = 1
+
+    override fun dispatchTouchEvent(e: android.view.MotionEvent): Boolean {
+        when (e.actionMasked) {
+            android.view.MotionEvent.ACTION_DOWN -> { downX = e.x; downY = e.y }
+            android.view.MotionEvent.ACTION_UP -> {
+                val dx = e.x - downX
+                if (Math.abs(dx) > dp(90) && Math.abs(dx) > Math.abs(e.y - downY) * 2) {
+                    // Default (Arabic): swipe left->right = next page.
+                    val next = if (AppSettings.flipRtl(this)) dx > 0 else dx < 0
+                    val to = (page + if (next) 1 else -1).coerceIn(0, lastPages - 1)
+                    if (to != page) { page = to; render() }
+                    return true
+                }
+            }
+        }
+        return super.dispatchTouchEvent(e)
+    }
+
     private fun askAccess() {
         content.removeAllViews()
         content.addView(
@@ -143,6 +164,13 @@ class HomeActivity : Activity() {
             textDirection = View.TEXT_DIRECTION_LTR
             setOnClickListener { onBackPressed() }
         }
+        header.addView(
+            TextView(this).apply {
+                text = "→ رجوع"; textSize = Ink.sp(20f); typeface = Ink.serifBold; setTextColor(Color.BLACK)
+                setPadding(dp(14), dp(8), dp(14), dp(8)); setBackgroundResource(android.R.drawable.btn_default_small)
+                setOnClickListener { onBackPressed() }
+            },
+        )
         header.addView(crumb, LinearLayout.LayoutParams(0, -2, 1f))
         header.addView(
             TextView(this).apply {
@@ -183,10 +211,12 @@ class HomeActivity : Activity() {
         if (w == 0 || h == 0) return
         content.removeAllViews()
         val cellW = (w - dp(24)) / cols
-        val cellH = (cellW * 1.42f).toInt() + dp(78)
-        val rows = (h / cellH).coerceAtLeast(1)
+        val cellH0 = (cellW * 1.42f).toInt() + dp(78)
+        val rows = Math.round(h.toFloat() / cellH0).coerceAtLeast(1)
+        val cellH = (h - dp(6)) / rows // stretch so the grid fills the whole screen
         val perPage = rows * cols
         val pages = ((entries.size + perPage - 1) / perPage).coerceAtLeast(1)
+        lastPages = pages
         page = page.coerceIn(0, pages - 1)
         val slice = entries.drop(page * perPage).take(perPage)
         val grid = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(12), dp(6), dp(12), 0) }
@@ -232,7 +262,7 @@ class HomeActivity : Activity() {
             layoutParams = LinearLayout.LayoutParams(cellW, cellH)
             setOnClickListener { openEntry(f) }
         }
-        val artH = (cellW * 1.28f).toInt()
+        val artH = (cellH - dp(78)).coerceAtLeast(dp(60))
         val art: View = if (f.isDirectory) folderArt(f) else coverArt(f)
         box.addView(art, LinearLayout.LayoutParams(-1, artH))
         box.addView(
