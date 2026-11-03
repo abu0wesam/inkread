@@ -16,6 +16,7 @@ use std::io::Cursor;
 use rbook::ebook::toc::TocEntry as RbookTocEntry;
 use rbook::Epub;
 
+pub mod arabic;
 pub mod content;
 pub mod css;
 pub mod img;
