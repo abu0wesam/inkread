@@ -193,6 +193,13 @@ class ReaderActivity : Activity(), SurfaceHolder.Callback {
         override val activity get() = this@ReaderActivity
         override val docHandle get() = this@ReaderActivity.docHandle
         override val prefs get() = displayPrefs
+        override fun startManualCrop() = this@ReaderActivity.startManualCrop()
+        override fun clearManualCrop() {
+            engine.execute {
+                try { NativeBridge.nativeSetCropRect(docHandle, 0f, 0f, 0f, 0f) } catch (e: RuntimeException) {}
+                repaintPanel()
+            }
+        }
         override val reflowOn get() = this@ReaderActivity.reflowOn
         override val zoomPercent get() = (zoom * 100).toInt()
         override fun engineExecute(block: () -> Unit) { engine.execute(block) }
@@ -528,6 +535,7 @@ class ReaderActivity : Activity(), SurfaceHolder.Callback {
         adapter.attachView(surfaceView)
         // Host the surface + the docked tool toolbar (ADR-INKREAD-0010) in a FrameLayout overlay.
         val root = FrameLayout(this)
+        rootView = root
         root.addView(
             surfaceView,
             FrameLayout.LayoutParams(
@@ -592,6 +600,9 @@ class ReaderActivity : Activity(), SurfaceHolder.Callback {
         stylus.penWidthIndex = prefs
             .getInt(KEY_PEN_WIDTH, StylusInkController.DEFAULT_PEN_WIDTH_INDEX)
             .coerceIn(0, StylusInkController.PEN_WIDTHS.size - 1)
+        stylus.smoothWidthIndex = prefs
+            .getInt(KEY_SMOOTH_WIDTH, StylusInkController.DEFAULT_SMOOTH_INDEX)
+            .coerceIn(0, StylusInkController.SMOOTH_WIDTHS.size - 1)
         setContentView(root)
     }
 
@@ -958,6 +969,7 @@ class ReaderActivity : Activity(), SurfaceHolder.Callback {
             try { NativeBridge.nativeSetFit(docHandle, displayPrefs.fit) } catch (e: RuntimeException) {}
             // Re-apply the saved auto-crop + margin (RR4); default off.
             try { NativeBridge.nativeSetCrop(docHandle, if (displayPrefs.cropAuto) 1 else 0, displayPrefs.cropMargin) } catch (e: RuntimeException) {}
+            try { NativeBridge.nativeSetCropExtra(docHandle, displayPrefs.cropSide, displayPrefs.cropVert) } catch (e: RuntimeException) {}
             // Re-apply the saved render quality (RR4); default 1.
             try { NativeBridge.nativeSetRenderQuality(docHandle, displayPrefs.renderQuality) } catch (e: RuntimeException) {}
             // (line spacing + alignment were restored above, in the same nativeSetTypography call)
@@ -1366,6 +1378,36 @@ class ReaderActivity : Activity(), SurfaceHolder.Callback {
      * right third = next, center = contents). The page fills the viewport (stretched render), so
      * the hit-test is the normalized tap `(x/w, y/h)` against the link rects.
      */
+    private var rootView: FrameLayout? = null
+
+    /**
+     * Manual crop: show the whole page uncropped, let the reader drag a rectangle over it, and on
+     * confirm apply that rectangle to every page (the core maps it back to page space).
+     */
+    private fun startManualCrop() {
+        val root = rootView ?: return
+        engine.execute {
+            try {
+                NativeBridge.nativeSetCropRect(docHandle, 0f, 0f, 0f, 0f)
+                NativeBridge.nativeSetCrop(docHandle, 0, 0)
+                NativeBridge.nativeSetCropExtra(docHandle, 0, 0)
+            } catch (e: RuntimeException) {}
+            repaintPanel()
+            runOnUiThread {
+                ManualCropOverlay.show(this, root) { r ->
+                    engine.execute {
+                        try {
+                            if (r != null) NativeBridge.nativeSetCropRect(docHandle, r.left, r.top, r.right, r.bottom)
+                            NativeBridge.nativeSetCrop(docHandle, if (displayPrefs.cropAuto) 1 else 0, displayPrefs.cropMargin)
+                            NativeBridge.nativeSetCropExtra(docHandle, displayPrefs.cropSide, displayPrefs.cropVert)
+                        } catch (e: RuntimeException) {}
+                        repaintPanel()
+                    }
+                }
+            }
+        }
+    }
+
     /** Arabic (right-to-left) page turning reverses every horizontal turn gesture. */
     private fun flipDir(d: Int): Int = if (AppSettings.flipRtl(this)) -d else d
 
@@ -1530,6 +1572,11 @@ class ReaderActivity : Activity(), SurfaceHolder.Callback {
             else openToolOptions("قلم التظليل", HIGHLIGHT_COLORS, HIGHLIGHT_COLOR_NAMES, stylus.hlColorIndex) { stylus.hlColorIndex = it }
             return true
         }
+        if (chosen == Tool.SMOOTH && tool == Tool.SMOOTH) {
+            if (toolOptions.isShowing()) collapseToolOptions()
+            else openSmoothOptions()
+            return true
+        }
         if (chosen == Tool.PEN && tool == Tool.PEN) {
             if (toolOptions.isShowing()) collapseToolOptions()
             else openPenOptions()
@@ -1581,6 +1628,24 @@ class ReaderActivity : Activity(), SurfaceHolder.Callback {
      * survives a relaunch the way the reader's other typography choices do; strokes already written
      * keep the width they were drawn at, since the core stores width per stroke.
      */
+    private fun openSmoothOptions() {
+        toolOptions.show(
+            "القلم الناعم",
+            PEN_COLORS,
+            PEN_COLOR_NAMES,
+            stylus.penColorIndex,
+            StylusInkController.SMOOTH_WIDTHS,
+            StylusInkController.SMOOTH_NAMES,
+            stylus.smoothWidthIndex,
+            { stylus.penColorIndex = it },
+            {
+                stylus.smoothWidthIndex = it
+                prefs.edit().putInt(KEY_SMOOTH_WIDTH, it).apply()
+            },
+        )
+        postJump(currentPage)
+    }
+
     private fun openPenOptions() {
         toolOptions.show(
             "القلم",
@@ -1795,7 +1860,7 @@ class ReaderActivity : Activity(), SurfaceHolder.Callback {
         // setup() re-enables the writable area each call (incl. on focus regain), so re-assert here
         // for every reason. setWritable rides the service_myservice binder (works for a sideloaded
         // app); enableFullUiAuto is SELinux-blocked.
-        val inkWritable = tool == Tool.PEN
+        val inkWritable = false // every tool draws its own live stroke, at its stored width
         ink.setWritable(inkWritable)
         Log.i(TAG, "ink claimed ($reason) for $tool: available=$ok writable=$inkWritable")
     }
@@ -1921,6 +1986,7 @@ class ReaderActivity : Activity(), SurfaceHolder.Callback {
         const val PREFS = "inkread"
         const val KEY_BOOK_PATH = "book_path" // stored PDF under app storage (RR27).
         const val KEY_BOOK_ID = "book_id" // stable per-book id (the stored file name).
+        const val KEY_SMOOTH_WIDTH = "smooth_width"
         const val KEY_PEN_WIDTH = "pen_width" // selected pen thickness, an index into PEN_WIDTHS (#199).
         /**
          * The bookmark dog-ear's tap target: the top [BOOKMARK_ZONE_H] of the rightmost

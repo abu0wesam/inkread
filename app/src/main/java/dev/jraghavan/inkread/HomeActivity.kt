@@ -1,583 +1,336 @@
 package dev.jraghavan.inkread
 
 import android.app.Activity
+import android.app.AlertDialog
 import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.Canvas
 import android.graphics.Color
-import android.graphics.Typeface
-import android.graphics.drawable.GradientDrawable
+import android.graphics.Paint
+import android.graphics.Path
+import android.graphics.pdf.PdfRenderer
+import android.net.Uri
 import android.os.Bundle
+import android.os.Environment
+import android.os.FileObserver
+import android.os.Handler
+import android.os.Looper
+import android.os.ParcelFileDescriptor
+import android.provider.Settings
+import android.util.LruCache
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
-import android.widget.ScrollView
 import android.widget.TextView
+import java.io.File
+import java.util.concurrent.Executors
+import java.util.zip.ZipFile
 
 /**
- * The InkRead home / launcher — the "Inkwell" home screen (RR16/RR17/RR26). A calm, 1-bit
- * stationery layout: the brand (inkwell mark · script name · version) like a book title page, a
- * **Continue where you left off** hero for the most-recent book, a **Recently on your shelf** row of
- * staggered covers with read-percentages, an *Open a Document* action, and a closing flourish.
- *
- * Plain framework Activity with programmatic Views, to match the shell. The design (claude.ai/design
- * "Inkwell") leans on three faces: Pinyon Script (bundled) for the brand, a serif for body, and a
- * mono for the small uppercase eyebrows. Only the script is bundled (offline e-ink), so body/eyebrow
- * fall back to the platform serif/monospace. Every figure shown is real device data — the design's
- * decorative streak/stats/author/page-count chrome is omitted rather than faked.
+ * Home: a file browser over the device's Document folder (like the Supernote file manager) — folders
+ * and books in a paged grid, with the read position under each book. It lists the files in place
+ * (nothing is copied) and refreshes the moment a file appears, changes, or is removed.
  */
 class HomeActivity : Activity() {
     override fun attachBaseContext(newBase: android.content.Context) = super.attachBaseContext(ArabicUi.wrap(newBase))
 
+    private val ui = Handler(Looper.getMainLooper())
+    private val worker = Executors.newSingleThreadExecutor()
+    private val covers = LruCache<String, Bitmap>(48)
+    private val root: File = File(Environment.getExternalStorageDirectory(), "Document")
+    private var dir: File = root
+    private var page = 0
+    private var observer: FileObserver? = null
+    private var entries: List<File> = emptyList()
 
-    private val density get() = resources.displayMetrics.density
-    private fun dp(v: Int) = (v * density).toInt()
-    private val phi = 1.618f
+    private lateinit var crumb: TextView
+    private lateinit var content: FrameLayout
+    private lateinit var pager: LinearLayout
+    private val refresh = Runnable { reload() }
 
-    /** Spencerian-inspired script (Pinyon Script, OFL); bold = synthetic (single-weight font). */
-    private val script by lazy { Typeface.createFromAsset(assets, "fonts/pinyon_script.ttf") }
-    private val scriptBold by lazy { Typeface.create(script, Typeface.BOLD) }
-    /** Body serif (Crimson Pro in the design → platform serif offline). */
-    private val serif = Typeface.SERIF
-    /** Eyebrow / label face (Space Mono in the design → platform monospace offline). */
-    private val mono = Typeface.MONOSPACE
-
-    private val ink = Color.BLACK
-    private val inkSoft = Color.parseColor("#3A3A3A")
-    private val textSecondary = Color.parseColor("#333333")
-    private val textMuted = Color.parseColor("#757575")
-
-    /**
-     * Width-driven scale so the one screen reads well on both the 10" tablet (primary) and the 7"
-     * reader (the design's two frames are the same layout at two sizes). Set per build; design values
-     * below are expressed in the artboard's ~716-unit content column.
-     */
-    private var scale = 1f
-    private fun dim(designUnits: Number) = dp((designUnits.toFloat() * scale).toInt()).coerceAtLeast(1)
-    private fun fs(designUnits: Number) = designUnits.toFloat() * scale
-
-    /** Enlarge the capital letters (swash initials) for a Spencerian flourish. */
-    private fun swashCaps(text: String, factor: Float = 1.45f): CharSequence {
-        val s = android.text.SpannableString(text)
-        text.forEachIndexed { i, c ->
-            if (c.isUpperCase()) {
-                s.setSpan(android.text.style.RelativeSizeSpan(factor), i, i + 1, android.text.Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
-            }
-        }
-        return s
-    }
-
-    /** Signature of the shelf state the current view was built from — lets onResume skip a full
-     *  rebuild (and the e-ink full refresh it triggers) when nothing the home screen shows changed,
-     *  e.g. returning from Settings rather than the reader. */
-    private var shelfSig: String? = null
+    private val cols = 4
+    private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // Keep the shared chrome scale (#133) in sync with the user's menu-size preference so any
-        // Ink-built popup on the home screen matches the reader.
         Ink.uiScale = DisplayPrefs(this).uiScale
-        setContentView(buildView())
-        shelfSig = shelfSignature()
-        DailyAutoCompileWorker.schedule(this) // a fresh Daily issue compiles each morning (#66)
+        setContentView(build())
+        DailyAutoCompileWorker.schedule(this)
     }
 
     override fun onResume() {
         super.onResume()
-        val sig = shelfSignature()
-        if (sig != shelfSig) {
-            setContentView(buildView()) // refresh covers + progress after returning from the reader
-            shelfSig = sig
+        if (!Environment.isExternalStorageManager()) {
+            askAccess()
+            return
         }
-        UpdateGate.maybeCheckOnLaunch(this) // throttled GitHub release check (ADR-INKREAD-0014)
+        reload()
+        watch()
+        UpdateGate.maybeCheckOnLaunch(this)
     }
 
-    /** A stable digest of what the shelf renders — recents order + per-book read progress, plus the
-     *  stored-book count so removing a book that was past the recents cut still refreshes the
-     *  "Your shelf · N books" line. */
-    private fun shelfSignature(): String =
-        Books.recents(this).joinToString("|") { "${it.id}@${Books.progress(this, it.id)}" } +
-            "#${Books.list(this).size}"
+    override fun onPause() {
+        observer?.stopWatching()
+        observer = null
+        super.onPause()
+    }
 
-    private fun buildView(): View {
-        val w = resources.displayMetrics.widthPixels
-        // Slim golden margin (≈ W/φ⁵) so content fills the width rather than ~half of it.
-        val side = (w / (phi * phi * phi * phi * phi)).toInt().coerceIn(dp(20), dp(52))
-        val contentW = (w - 2 * side).coerceAtLeast(dp(280))
-        scale = (contentW.toFloat() / dp(716)).coerceIn(0.62f, 1.15f)
-
-        val column = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER_HORIZONTAL
-            setPadding(side, dim(40), side, dim(40))
-            // fillViewport stretches us to the screen; weighted spacers then centre short content
-            // and the closing flourish settles toward the bottom.
-            layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
-        }
-
-        column.addView(brandBlock())
-
-        val recents = Books.recents(this)
-        column.addView(spacerWeighted(1f))
-        if (recents.isEmpty()) {
-            column.addView(TextView(this).apply {
-                text = "افتح مستندًا لتبدأ مكتبتك."
-                setTextColor(textMuted); textSize = fs(16f); gravity = Gravity.CENTER
-                typeface = serif
-            })
+    override fun onBackPressed() {
+        if (dir != root && dir.parentFile != null) {
+            dir = dir.parentFile!!
+            page = 0
+            watch()
+            reload()
         } else {
-            column.addView(heroCard(recents.first(), contentW))
-        }
-        // The InkRead Daily — the day's issue as a strip card (the design's in-flow Daily entry).
-        column.addView(spacer(dim(24)))
-        column.addView(dailyCard(contentW))
-        // Your calibre / Calibre-Web library, once one is configured (ADR-INKREAD-0016). Hidden
-        // until then: an entry point to a server you have not set up is a dead end, and Settings is
-        // where you would go looking for it anyway.
-        if (AppSettings.opdsConfigured(this)) {
-            column.addView(spacer(dim(14)))
-            column.addView(libraryCard(contentW))
-        }
-        if (recents.size >= 2) {
-            column.addView(spacer(dim(28)))
-            column.addView(eyebrowItalic("أُضيف مؤخرًا إلى رفّك"))
-            column.addView(spacer(dim(16)))
-            column.addView(shelf(recents.take(3), contentW))
-        }
-        column.addView(spacer(dim(28)))
-        column.addView(openButton())
-        // Everything on the device, not just the recent handful — and the only route to removing a
-        // book. Shown whenever anything is stored, since a book past the recents cut is otherwise
-        // invisible while still taking up space.
-        allBooksLink()?.let {
-            column.addView(spacer(dim(12)))
-            column.addView(it)
-        }
-        statChips()?.let {
-            column.addView(spacer(dim(16)))
-            column.addView(it)
-        }
-        column.addView(spacerWeighted(phi))
-        column.addView(closingMark())
-
-        val scroll = ScrollView(this).apply {
-            isFillViewport = true
-            isVerticalScrollBarEnabled = false
-            addView(column)
-        }
-        // A subtle top-corner gear → app Settings (the Daily entry is the in-flow card below).
-        return FrameLayout(this).apply {
-            setBackgroundColor(Color.WHITE)
-            addView(scroll, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
-            addView(ImageView(this@HomeActivity).apply {
-                setImageResource(R.drawable.ic_settings)
-                val p = dp(8); setPadding(p, p, p, p)
-                isClickable = true
-                setOnClickListener { startActivity(Intent(this@HomeActivity, SettingsActivity::class.java)) }
-            }, FrameLayout.LayoutParams(dp(40), dp(40), Gravity.TOP or Gravity.END).apply {
-                topMargin = dp(10); marginEnd = dp(10)
-            })
+            super.onBackPressed()
         }
     }
 
-    // ── Brand: inkwell mark · script name · version, like a title page ────────────────────────────
-
-    private fun brandBlock(): View = LinearLayout(this).apply {
-        orientation = LinearLayout.VERTICAL
-        gravity = Gravity.CENTER_HORIZONTAL
-        val logo = dim(56)
-        addView(ImageView(this@HomeActivity).apply { setImageResource(R.mipmap.ic_launcher) }, LinearLayout.LayoutParams(logo, logo).apply { bottomMargin = dim(8) })
-        addView(TextView(this@HomeActivity).apply {
-            text = swashCaps("InkRead"); setTextColor(ink); textSize = fs(58f)
-            typeface = scriptBold; paint.isFakeBoldText = true; gravity = Gravity.CENTER
-            includeFontPadding = false
-        })
-        addView(eyebrow("·  Super Reader · v${versionName()}  ·").apply { gravity = Gravity.CENTER; setPadding(0, dim(10), 0, 0) })
-    }
-
-    // ── Continue where you left off (the most-recent book) ───────────────────────────────────────
-
-    private fun heroCard(r: Books.Recent, contentW: Int): View {
-        // Covers reduced ~40% from the design's 114×162 — they were reading too large on device.
-        val coverW = dim(68)
-        val coverH = dim(97)
-        val pad = dim(20)
-        val gap = dim(20)
-        return LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            setPadding(pad, pad, pad, pad)
-            background = outlined(dim(12))
-            isClickable = true
-            setOnClickListener { open(r) }
-            layoutParams = LinearLayout.LayoutParams(contentW, ViewGroup.LayoutParams.WRAP_CONTENT)
-
-            addView(cover(r, coverW, coverH, spine = true))
-
-            addView(LinearLayout(this@HomeActivity).apply {
-                orientation = LinearLayout.VERTICAL
-                addView(TextView(this@HomeActivity).apply {
-                    text = "تابع من حيث توقفت"; setTextColor(inkSoft); textSize = fs(15f)
-                    typeface = Typeface.create(serif, Typeface.ITALIC)
-                })
-                addView(TextView(this@HomeActivity).apply {
-                    text = Books.displayTitle(this@HomeActivity, r); setTextColor(ink); textSize = fs(26f)
-                    typeface = serif; maxLines = 3; setLineSpacing(0f, 1.1f); setPadding(0, dim(7), 0, 0)
-                })
-                Books.metaAuthor(this@HomeActivity, r.id)?.let { author ->
-                    addView(TextView(this@HomeActivity).apply {
-                        text = author; setTextColor(inkSoft); textSize = fs(15f)
-                        typeface = Typeface.create(serif, Typeface.ITALIC); setPadding(0, dim(5), 0, 0)
-                    })
+    private fun askAccess() {
+        content.removeAllViews()
+        content.addView(
+            TextView(this).apply {
+                text = "يحتاج التطبيق إذن الوصول إلى الملفات ليقرأ مجلد المستندات.\nاضغط هنا لمنحه."
+                textSize = Ink.sp(20f); typeface = Ink.serifBold; gravity = Gravity.CENTER
+                setTextColor(Color.BLACK)
+                setOnClickListener {
+                    startActivity(
+                        Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, Uri.parse("package:$packageName")),
+                    )
                 }
-                addView(spacerWeighted(1f))
-                val percent = Books.progress(this@HomeActivity, r.id)
-                val pages = Books.metaPages(this@HomeActivity, r.id)
-                // "page N / M · X% complete" when the page count is known, else just the percentage.
-                val progressLabel = if (pages > 0)
-                    "page ${Books.metaPage(this@HomeActivity, r.id) + 1} / $pages · $percent%"
-                else "$percent% complete"
-                addView(LinearLayout(this@HomeActivity).apply {
-                    orientation = LinearLayout.HORIZONTAL
-                    gravity = Gravity.CENTER_VERTICAL
-                    setPadding(0, dim(14), 0, 0)
-                    addView(eyebrow(progressLabel))
-                    addView(spacerWeighted(1f))
-                    addView(TextView(this@HomeActivity).apply {
-                        text = "← متابعة"; setTextColor(ink); textSize = fs(15f); typeface = serif
-                        paintFlags = paintFlags or android.graphics.Paint.UNDERLINE_TEXT_FLAG
-                    })
-                })
-                addView(progressBar(percent).apply {
-                    (layoutParams as LinearLayout.LayoutParams).topMargin = dim(8)
-                })
-            }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f).apply { marginStart = gap })
+            },
+            FrameLayout.LayoutParams(-1, -1),
+        )
+    }
+
+    /** Re-list instantly whenever something changes in the open folder. */
+    private fun watch() {
+        observer?.stopWatching()
+        val mask = FileObserver.CREATE or FileObserver.DELETE or FileObserver.MOVED_FROM or
+            FileObserver.MOVED_TO or FileObserver.CLOSE_WRITE or FileObserver.DELETE_SELF
+        observer = object : FileObserver(dir, mask) {
+            override fun onEvent(event: Int, path: String?) {
+                ui.removeCallbacks(refresh)
+                ui.postDelayed(refresh, 250)
+            }
+        }.also { it.startWatching() }
+    }
+
+    private fun isBook(f: File) = f.isFile && f.extension.lowercase() in setOf("epub", "pdf", "cbz", "txt")
+
+    private fun reload() {
+        if (!dir.exists()) dir = root
+        val all = dir.listFiles()?.filter { !it.name.startsWith(".") && !it.name.endsWith(".inkread") } ?: emptyList()
+        entries = all.filter { it.isDirectory }.sortedBy { it.name.lowercase() } +
+            all.filter { isBook(it) }.sortedBy { it.name.lowercase() }
+        crumb.text = "Supernote  >>  " + dir.relativeTo(root.parentFile ?: root).path.replace("/", "  >>  ")
+        render()
+    }
+
+    private fun build(): View {
+        val col = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(Color.WHITE) }
+        val header = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(20), dp(14), dp(20), dp(14))
+        }
+        crumb = TextView(this).apply {
+            textSize = Ink.sp(20f); typeface = Ink.serifBold; setTextColor(Color.BLACK); maxLines = 1
+            ellipsize = android.text.TextUtils.TruncateAt.START
+            textDirection = View.TEXT_DIRECTION_LTR
+            setOnClickListener { onBackPressed() }
+        }
+        header.addView(crumb, LinearLayout.LayoutParams(0, -2, 1f))
+        header.addView(
+            TextView(this).apply {
+                text = "☰"; textSize = Ink.sp(30f); typeface = Ink.serifBold; setTextColor(Color.BLACK)
+                setPadding(dp(18), 0, dp(18), 0)
+                setOnClickListener { menu() }
+            },
+        )
+        col.addView(header)
+        col.addView(View(this).apply { setBackgroundColor(Color.BLACK) }, LinearLayout.LayoutParams(-1, dp(2)))
+        content = FrameLayout(this)
+        content.addOnLayoutChangeListener { _, l, t, r, b, ol, ot, orr, ob ->
+            if (r - l != orr - ol || b - t != ob - ot) render()
+        }
+        col.addView(content, LinearLayout.LayoutParams(-1, 0, 1f))
+        pager = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER }
+        col.addView(pager, LinearLayout.LayoutParams(-1, dp(64)))
+        return col
+    }
+
+    private fun menu() {
+        val items = arrayOf("الصحيفة اليومية", "المكتبة والتنزيل", "رفّ الكتب", "فتح ملف من خارج المستندات", "الإعدادات", "تحديث")
+        AlertDialog.Builder(this).setItems(items) { _, i ->
+            when (i) {
+                0 -> startActivity(Intent(this, DailyActivity::class.java))
+                1 -> startActivity(Intent(this, OpdsActivity::class.java))
+                2 -> startActivity(Intent(this, ShelfActivity::class.java))
+                3 -> startActivity(Intent(this, ReaderActivity::class.java).putExtra(ReaderActivity.EXTRA_PICK, true))
+                4 -> startActivity(Intent(this, SettingsActivity::class.java))
+                else -> reload()
+            }
+        }.show()
+    }
+
+    private fun render() {
+        val w = content.width
+        val h = content.height
+        if (w == 0 || h == 0) return
+        content.removeAllViews()
+        val cellW = (w - dp(24)) / cols
+        val cellH = (cellW * 1.42f).toInt() + dp(78)
+        val rows = (h / cellH).coerceAtLeast(1)
+        val perPage = rows * cols
+        val pages = ((entries.size + perPage - 1) / perPage).coerceAtLeast(1)
+        page = page.coerceIn(0, pages - 1)
+        val slice = entries.drop(page * perPage).take(perPage)
+        val grid = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(12), dp(6), dp(12), 0) }
+        slice.chunked(cols).forEach { rowItems ->
+            val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+            rowItems.forEach { row.addView(cell(it, cellW, cellH)) }
+            grid.addView(row, LinearLayout.LayoutParams(-1, cellH))
+        }
+        if (entries.isEmpty()) {
+            grid.addView(
+                TextView(this).apply {
+                    text = "لا ملفات في هذا المجلد"; textSize = Ink.sp(20f); typeface = Ink.serifBold
+                    setTextColor(Color.DKGRAY); gravity = Gravity.CENTER; setPadding(0, dp(80), 0, 0)
+                },
+                LinearLayout.LayoutParams(-1, -2),
+            )
+        }
+        content.addView(grid, FrameLayout.LayoutParams(-1, -1))
+        pager.removeAllViews()
+        fun btn(label: String, to: Int, enabled: Boolean) = TextView(this).apply {
+            text = label; textSize = Ink.sp(28f); typeface = Ink.serifBold
+            setTextColor(if (enabled) Color.BLACK else Color.LTGRAY)
+            setPadding(dp(26), dp(8), dp(26), dp(8))
+            if (enabled) setOnClickListener { page = to; render() }
+        }
+        // RTL: the first control sits at the right edge, so "first" is on the right.
+        pager.addView(btn("⏮", 0, page > 0))
+        pager.addView(btn("◀", page - 1, page > 0))
+        pager.addView(
+            TextView(this).apply {
+                text = "${page + 1} / $pages"; textSize = Ink.sp(20f); typeface = Ink.serifBold
+                setTextColor(Color.BLACK); setPadding(dp(18), 0, dp(18), 0)
+                textDirection = View.TEXT_DIRECTION_LTR
+            },
+        )
+        pager.addView(btn("▶", page + 1, page < pages - 1))
+        pager.addView(btn("⏭", pages - 1, page < pages - 1))
+    }
+
+    private fun cell(f: File, cellW: Int, cellH: Int): View {
+        val box = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL; setPadding(dp(8), dp(6), dp(8), dp(4))
+            layoutParams = LinearLayout.LayoutParams(cellW, cellH)
+            setOnClickListener { openEntry(f) }
+        }
+        val artH = (cellW * 1.28f).toInt()
+        val art: View = if (f.isDirectory) folderArt(f) else coverArt(f)
+        box.addView(art, LinearLayout.LayoutParams(-1, artH))
+        box.addView(
+            TextView(this).apply {
+                text = if (f.isDirectory) f.name else f.name
+                textSize = Ink.sp(15f); typeface = Ink.serifBold; setTextColor(Color.BLACK)
+                maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.MIDDLE
+                setPadding(0, dp(6), 0, 0); textDirection = View.TEXT_DIRECTION_ANY_RTL
+            },
+        )
+        box.addView(
+            TextView(this).apply {
+                text = if (f.isDirectory) "${f.listFiles()?.count { !it.name.startsWith(".") && !it.name.endsWith(".inkread") } ?: 0} عنصر" else progressLabel(f)
+                textSize = Ink.sp(13f); typeface = Ink.serifBold; setTextColor(Color.DKGRAY); maxLines = 1
+            },
+        )
+        return box
+    }
+
+    private fun progressLabel(f: File): String {
+        val id = f.absolutePath
+        val pages = Books.metaPages(this, id)
+        return if (Books.progress(this, id) <= 0 && Books.metaPage(this, id) <= 0) "غير مقروء"
+        else if (pages > 0) "${Books.metaPage(this, id) + 1}/$pages" else "${Books.progress(this, id)}%"
+    }
+
+    private fun folderArt(f: File): View = object : View(this) {
+        private val p = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeWidth = dp(3).toFloat(); color = Color.BLACK }
+        override fun onDraw(c: Canvas) {
+            val w = width.toFloat() - dp(6); val h = height.toFloat() - dp(6)
+            val x = dp(3).toFloat(); val y = dp(3).toFloat(); val tab = h * 0.07f
+            val path = Path().apply {
+                moveTo(x, y + tab); lineTo(x, y + h); lineTo(x + w, y + h); lineTo(x + w, y + tab)
+                lineTo(x + w * 0.46f, y + tab); lineTo(x + w * 0.40f, y); lineTo(x, y); close()
+            }
+            c.drawPath(path, p)
         }
     }
 
-    // ── The InkRead Daily — the day's issue as a strip card (taps → DailyActivity) ───────────────
-
-    private fun dailyCard(contentW: Int): View {
-        val pad = dim(15)
-        return LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL // the masthead cell drives the height; others centre
-            background = outlined(dim(12))
-            isClickable = true
-            setOnClickListener { startActivity(Intent(this@HomeActivity, DailyActivity::class.java)) }
-            layoutParams = LinearLayout.LayoutParams(contentW, ViewGroup.LayoutParams.WRAP_CONTENT)
-
-            // Left masthead cell: THE / InkRead (script) / DAILY. WRAP height — it sizes the row.
-            addView(LinearLayout(this@HomeActivity).apply {
-                orientation = LinearLayout.VERTICAL
-                gravity = Gravity.CENTER_HORIZONTAL
-                setPadding(dim(14), pad, dim(12), pad)
-                addView(TextView(this@HomeActivity).apply {
-                    text = "THE"; setTextColor(ink); textSize = fs(8f); typeface = mono; letterSpacing = 0.28f
-                    gravity = Gravity.CENTER
-                })
-                addView(TextView(this@HomeActivity).apply {
-                    text = "InkRead"; setTextColor(ink); textSize = fs(26f); typeface = script
-                    includeFontPadding = false; gravity = Gravity.CENTER
-                })
-                addView(TextView(this@HomeActivity).apply {
-                    text = "DAILY"; setTextColor(ink); textSize = fs(11f); gravity = Gravity.CENTER
-                    typeface = Typeface.create(serif, Typeface.BOLD); letterSpacing = 0.4f
-                })
-            }, LinearLayout.LayoutParams(dim(120), ViewGroup.LayoutParams.WRAP_CONTENT))
-
-            addView(View(this@HomeActivity).apply { setBackgroundColor(ink) },
-                LinearLayout.LayoutParams(maxOf(1, dp(1)), dim(64)))
-
-            // Middle: today's status (centred vertically within the row).
-            addView(LinearLayout(this@HomeActivity).apply {
-                orientation = LinearLayout.VERTICAL
-                setPadding(dim(16), pad, dim(12), pad)
-                addView(eyebrow("صحيفة اليوم"))
-                addView(TextView(this@HomeActivity).apply {
-                    text = "قراءتك اليومية"; setTextColor(ink); textSize = fs(19f); typeface = serif
-                    setPadding(0, dim(4), 0, 0); maxLines = 2; setLineSpacing(0f, 1.1f)
-                })
-                addView(TextView(this@HomeActivity).apply {
-                    text = "مصادرك في عدد هادئ واحد على جهازك"
-                    setTextColor(inkSoft); textSize = fs(13f); typeface = Typeface.create(serif, Typeface.ITALIC)
-                    setPadding(0, dim(3), 0, 0)
-                })
-            }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-
-            // Right action (WRAP height, centred — not full-height, which made it a black bar).
-            addView(TextView(this@HomeActivity).apply {
-                text = "← فتح"; setTextColor(Color.WHITE); textSize = fs(14f)
-                typeface = Typeface.create(serif, Typeface.BOLD); gravity = Gravity.CENTER
-                setPadding(dim(18), dim(10), dim(18), dim(10))
-                background = GradientDrawable().apply { setColor(ink); cornerRadius = dim(6).toFloat() }
-            }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
-                marginEnd = dim(12)
-            })
-        }
-    }
-
-    // ── Your library — the configured OPDS server as a quiet strip (taps → OpdsActivity) ─────────
-
-    private fun libraryCard(contentW: Int): View {
-        val pad = dim(15)
-        return LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            background = outlined(dim(12))
-            isClickable = true
-            setOnClickListener { startActivity(Intent(this@HomeActivity, OpdsActivity::class.java)) }
-            layoutParams = LinearLayout.LayoutParams(contentW, ViewGroup.LayoutParams.WRAP_CONTENT)
-
-            addView(LinearLayout(this@HomeActivity).apply {
-                orientation = LinearLayout.VERTICAL
-                setPadding(dim(16), pad, dim(12), pad)
-                addView(eyebrow("مكتبتك"))
-                addView(TextView(this@HomeActivity).apply {
-                    text = "تصفّح وتنزيل"
-                    setTextColor(ink); textSize = fs(19f); typeface = serif
-                    setPadding(0, dim(4), 0, 0); maxLines = 1
-                })
-                addView(TextView(this@HomeActivity).apply {
-                    text = AppSettings.opdsUrl(this@HomeActivity)
-                    setTextColor(inkSoft); textSize = fs(13f); typeface = mono
-                    setPadding(0, dim(3), 0, 0); maxLines = 1
-                })
-            }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-
-            addView(TextView(this@HomeActivity).apply {
-                text = "← فتح"; setTextColor(Color.WHITE); textSize = fs(14f)
-                typeface = Typeface.create(serif, Typeface.BOLD); gravity = Gravity.CENTER
-                setPadding(dim(18), dim(10), dim(18), dim(10))
-                background = GradientDrawable().apply { setColor(ink); cornerRadius = dim(6).toFloat() }
-            }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
-                marginEnd = dim(12)
-            })
-        }
-    }
-
-    // ── Recently on your shelf: staggered covers on a shelf, read-% beneath ──────────────────────
-
-    /** Per-cover height multipliers (of cell width) — the design's 226/242/220-on-148 stagger. */
-    private val shelfRatios = floatArrayOf(1.50f, 1.62f, 1.46f)
-
-    private fun shelf(recents: List<Books.Recent>, contentW: Int): View {
-        val gap = dim(22)
-        val cells = recents.size.coerceAtMost(3)
-        // ~40% smaller than full-width thirds (the shelf covers were reading too large); the row is
-        // centre-gravity so the smaller covers sit centered with margin.
-        val cellW = (((contentW - (cells - 1) * gap) / cells) * 0.6f).toInt().coerceAtLeast(dp(48))
-
-        val covers = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
-            recents.take(3).forEachIndexed { i, r ->
-                val h = (cellW * shelfRatios[i % shelfRatios.size]).toInt()
-                addView(cover(r, cellW, h, spine = true).apply {
-                    isClickable = true; setOnClickListener { open(r) }
-                }, LinearLayout.LayoutParams(cellW, h).apply { marginStart = if (i == 0) 0 else gap })
+    private fun coverArt(f: File): View {
+        val iv = ImageView(this).apply { scaleType = ImageView.ScaleType.CENTER_CROP; setBackgroundColor(Color.parseColor("#F2F2F2")) }
+        val key = f.absolutePath + "@" + f.lastModified()
+        covers.get(key)?.let { iv.setImageBitmap(it); return frame(iv) }
+        Books.loadThumbnail(this, f.absolutePath)?.let { covers.put(key, it); iv.setImageBitmap(it); return frame(iv) }
+        worker.execute {
+            val bmp = makeCover(f)
+            if (bmp != null) {
+                covers.put(key, bmp)
+                ui.post { iv.setImageBitmap(bmp) }
             }
         }
-        val shelfBar = View(this).apply {
-            background = GradientDrawable().apply { setColor(ink); cornerRadius = dim(2).toFloat() }
-            layoutParams = LinearLayout.LayoutParams(contentW, dim(5)).apply { topMargin = dim(1) }
-        }
-        val labels = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_HORIZONTAL
-            setPadding(0, dim(10), 0, 0)
-            recents.take(3).forEachIndexed { i, r ->
-                addView(eyebrow("${Books.progress(this@HomeActivity, r.id)}% read").apply {
-                    gravity = Gravity.CENTER
-                }, LinearLayout.LayoutParams(cellW, ViewGroup.LayoutParams.WRAP_CONTENT).apply { marginStart = if (i == 0) 0 else gap })
-            }
-        }
-        return LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER_HORIZONTAL
-            addView(covers)
-            addView(shelfBar)
-            addView(labels)
-        }
+        return frame(iv)
     }
 
-    // ── Closing flourish: script line · inkwell mark between rules ────────────────────────────────
-
-    private fun closingMark(): View = LinearLayout(this).apply {
-        orientation = LinearLayout.VERTICAL
-        gravity = Gravity.CENTER_HORIZONTAL
-        addView(TextView(this@HomeActivity).apply {
-            text = swashCaps("قارئ خارق لشخص خارق")
-            // Subtle footer: small (matches the version eyebrow's 12sp) and light (muted grey, not
-            // the heavy dark script it was) so it reads as a quiet tagline, not a headline.
-            setTextColor(textMuted); textSize = fs(12f); typeface = script
-            gravity = Gravity.CENTER; includeFontPadding = false
-        })
-        addView(LinearLayout(this@HomeActivity).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER
-            setPadding(0, dim(6), 0, 0)
-            addView(rule())
-            addView(ImageView(this@HomeActivity).apply { setImageResource(R.mipmap.ic_launcher) },
-                LinearLayout.LayoutParams(dim(20), dim(20)).apply { marginStart = dim(12); marginEnd = dim(12) })
-            addView(rule())
-        })
+    private fun frame(v: View) = FrameLayout(this).apply {
+        addView(v, FrameLayout.LayoutParams(-1, -1))
+        foreground = android.graphics.drawable.GradientDrawable().apply { setStroke(dp(2), Color.BLACK); setColor(Color.TRANSPARENT) }
     }
 
-    private fun rule(): View = View(this).apply {
-        setBackgroundColor(ink)
-        layoutParams = LinearLayout.LayoutParams(dim(40), maxOf(1, dp(1)))
-    }
-
-    // ── Shared pieces ────────────────────────────────────────────────────────────────────────────
-
-    /** A book cover: cached first-page thumbnail, else a black "spine" (or bordered) placeholder. */
-    private fun cover(r: Books.Recent, w: Int, h: Int, spine: Boolean): View {
-        val bmp = Books.loadThumbnail(this, r.id)
-        if (bmp != null) {
-            return ImageView(this).apply {
-                scaleType = ImageView.ScaleType.CENTER_CROP
-                setImageBitmap(bmp)
-                background = GradientDrawable().apply { setStroke(maxOf(1, dp(1)), ink) }
-                layoutParams = LinearLayout.LayoutParams(w, h)
-            }
-        }
-        if (!spine) {
-            return TextView(this).apply {
-                text = Books.displayTitle(this@HomeActivity, r); setTextColor(textSecondary); textSize = fs(12f); typeface = serif
-                gravity = Gravity.CENTER; setPadding(dim(8), dim(8), dim(8), dim(8))
-                background = GradientDrawable().apply {
-                    setColor(Color.parseColor("#EFEFEF")); setStroke(maxOf(1, dp(1)), ink)
+    private fun makeCover(f: File): Bitmap? = try {
+        when (f.extension.lowercase()) {
+            "pdf" -> ParcelFileDescriptor.open(f, ParcelFileDescriptor.MODE_READ_ONLY).use { fd ->
+                PdfRenderer(fd).use { r ->
+                    r.openPage(0).use { p ->
+                        val bw = 360
+                        val bmp = Bitmap.createBitmap(bw, (bw * p.height.toFloat() / p.width).toInt().coerceAtLeast(1), Bitmap.Config.ARGB_8888)
+                        bmp.eraseColor(Color.WHITE)
+                        p.render(bmp, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+                        bmp
+                    }
                 }
-                layoutParams = LinearLayout.LayoutParams(w, h)
             }
-        }
-        // Black book spine with a white page-edge and the title set in white, bottom-aligned.
-        return LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            background = GradientDrawable().apply { setColor(ink); cornerRadius = dim(5).toFloat() }
-            layoutParams = LinearLayout.LayoutParams(w, h)
-            addView(View(this@HomeActivity).apply { setBackgroundColor(Color.WHITE) },
-                LinearLayout.LayoutParams(dim(4), ViewGroup.LayoutParams.MATCH_PARENT))
-            addView(TextView(this@HomeActivity).apply {
-                text = Books.displayTitle(this@HomeActivity, r); setTextColor(Color.WHITE); textSize = fs(15f); typeface = serif
-                gravity = Gravity.BOTTOM; setLineSpacing(0f, 1.12f)
-                setPadding(dim(12), dim(12), dim(12), dim(12))
-                layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f)
-            })
-        }
-    }
-
-    /** A thin read-progress bar inside a black-outlined capsule (filled portion solid black). */
-    private fun progressBar(percent: Int): View {
-        val p = percent.coerceIn(0, 100)
-        return LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            background = GradientDrawable().apply {
-                setColor(Color.WHITE); setStroke(maxOf(1, dp(1)), ink); cornerRadius = dim(6).toFloat()
+            "epub" -> ZipFile(f).use { z ->
+                val e = z.entries().asSequence().firstOrNull {
+                    val n = it.name.lowercase()
+                    n.contains("cover") && (n.endsWith(".jpg") || n.endsWith(".jpeg") || n.endsWith(".png"))
+                } ?: z.entries().asSequence().firstOrNull {
+                    val n = it.name.lowercase(); n.endsWith(".jpg") || n.endsWith(".jpeg") || n.endsWith(".png")
+                }
+                e?.let { en ->
+                    val o = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                    z.getInputStream(en).use { BitmapFactory.decodeStream(it, null, o) }
+                    val s = (o.outWidth / 400).coerceAtLeast(1)
+                    z.getInputStream(en).use { BitmapFactory.decodeStream(it, null, BitmapFactory.Options().apply { inSampleSize = s }) }
+                }
             }
-            val padInner = maxOf(1, dp(1))
-            setPadding(padInner, padInner, padInner, padInner)
-            layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dim(11))
-            if (p > 0) addView(View(this@HomeActivity).apply {
-                background = GradientDrawable().apply { setColor(ink); cornerRadius = dim(4).toFloat() }
-            }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, p.toFloat()))
-            if (p < 100) addView(View(this@HomeActivity), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, (100 - p).toFloat()))
+            else -> null
         }
-    }
+    } catch (e: Throwable) { null }
 
-    /**
-     * REAL reading stats (streak · this week · pages), as a plain line.
-     *
-     * These used to be outlined pills, which on this screen is the shape of a button — so the one
-     * thing on Home that *was* tappable looked like a label while three things that do nothing
-     * looked pressable (#227). Each part still appears only when it has data, so nothing is faked;
-     * null when there is nothing to report yet.
-     */
-    private fun statChips(): View? {
-        val chips = buildList {
-            val streak = ReadingStats.streakDays(this@HomeActivity)
-            val minutes = ReadingStats.weekMinutes(this@HomeActivity)
-            val pages = ReadingStats.weekPages(this@HomeActivity)
-            if (streak > 0) add(if (streak == 1) "قراءة يوم متواصل" else "$streak-day streak")
-            if (minutes > 0) add("${ReadingStats.formatMinutes(minutes)} this week")
-            if (pages > 0) add(if (pages == 1) "صفحة واحدة" else "$pages pages")
+    private fun openEntry(f: File) {
+        if (f.isDirectory) {
+            dir = f; page = 0; watch(); reload(); return
         }
-        if (chips.isEmpty()) return null
-        return TextView(this).apply {
-            text = chips.joinToString("   ·   ")
-            setTextColor(inkSoft); textSize = fs(13f); typeface = serif
-            gravity = Gravity.CENTER
-            setPadding(dim(12), dim(6), dim(12), dim(6))
-        }
+        startActivity(
+            Intent(this, ReaderActivity::class.java)
+                .putExtra(ReaderActivity.EXTRA_BOOK_PATH, f.absolutePath)
+                .putExtra(ReaderActivity.EXTRA_BOOK_ID, f.absolutePath),
+        )
     }
-
-    private fun openButton(): View = TextView(this).apply {
-        text = "＋  فتح مستند"; setTextColor(ink); textSize = fs(16f); typeface = serif
-        gravity = Gravity.CENTER
-        setPadding(dim(30), dim(13), dim(30), dim(13))
-        background = GradientDrawable().apply {
-            setColor(Color.WHITE); setStroke(maxOf(1, dp(1)), ink); cornerRadius = dim(40).toFloat()
-        }
-        isClickable = true; setOnClickListener { openPicker() }
-        layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
-    }
-
-    /**
-     * "Your shelf · N books" → [ShelfActivity]; `null` when the device holds nothing yet.
-     *
-     * Carries the same outlined-pill shape as [openButton], because it does the same kind of thing:
-     * both take you somewhere. It used to be set as plain mono text and read as a caption, which is
-     * how the shelf stayed hard to find (#227).
-     */
-    private fun allBooksLink(): View? {
-        val count = Books.list(this).size
-        if (count == 0) return null
-        return TextView(this).apply {
-            text = "Your shelf · $count ${if (count == 1) "book" else "books"}"
-            setTextColor(ink); textSize = fs(16f); typeface = serif
-            gravity = Gravity.CENTER
-            setPadding(dim(30), dim(13), dim(30), dim(13))
-            background = GradientDrawable().apply {
-                setColor(Color.WHITE); setStroke(maxOf(1, dp(1)), ink); cornerRadius = dim(40).toFloat()
-            }
-            isClickable = true
-            setOnClickListener { startActivity(Intent(this@HomeActivity, ShelfActivity::class.java)) }
-        }
-    }
-
-    /** A small uppercase, letter-spaced mono eyebrow (the design's Space Mono labels). */
-    private fun eyebrow(text: String): TextView = TextView(this).apply {
-        this.text = text.uppercase(); setTextColor(ink); textSize = fs(12f)
-        typeface = mono; letterSpacing = 0.12f
-    }
-
-    private fun eyebrowItalic(text: String): TextView = TextView(this).apply {
-        this.text = text; setTextColor(inkSoft); textSize = fs(16f); gravity = Gravity.CENTER
-        typeface = Typeface.create(serif, Typeface.ITALIC)
-    }
-
-    private fun outlined(radius: Int): GradientDrawable = GradientDrawable().apply {
-        setColor(Color.WHITE); setStroke(maxOf(1, (1.5f * density).toInt()), ink); cornerRadius = radius.toFloat()
-    }
-
-    private fun spacer(h: Int): View = View(this).apply {
-        layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, h)
-    }
-
-    private fun spacerWeighted(weight: Float): View = View(this).apply {
-        layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, weight)
-    }
-
-    private fun openPicker() = openReader(Intent().putExtra(ReaderActivity.EXTRA_PICK, true))
-
-    private fun open(r: Books.Recent) = openReader(
-        Intent().putExtra(ReaderActivity.EXTRA_BOOK_PATH, r.path).putExtra(ReaderActivity.EXTRA_BOOK_ID, r.id),
-    )
-
-    private fun openReader(extras: Intent) =
-        startActivity(Intent(this, ReaderActivity::class.java).putExtras(extras))
-
-    private fun versionName(): String =
-        try { packageManager.getPackageInfo(packageName, 0).versionName ?: "" } catch (e: Exception) { "" }
 }

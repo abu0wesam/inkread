@@ -53,6 +53,11 @@ class AdjustSheetController(private val host: Host) {
         /** Re-render + blit the current page (any thread). */
         fun repaintPanel()
 
+        /** Let the reader drag a crop rectangle over the page, then apply it to every page. */
+        fun startManualCrop()
+
+        fun clearManualCrop()
+
         /** Engine thread only: re-read the page count after a repagination. */
         fun refreshPageCount()
 
@@ -94,6 +99,7 @@ class AdjustSheetController(private val host: Host) {
     fun show() {
         if (host.docHandle == 0L) { host.openPicker(); return }
         val dialog = Dialog(activity).apply { requestWindowFeature(Window.FEATURE_NO_TITLE) }
+        shownDialog = dialog
         val content = android.widget.FrameLayout(activity)
 
         val panels: List<Triple<String, Int, () -> View>> = listOf(
@@ -224,6 +230,8 @@ class AdjustSheetController(private val host: Host) {
 
     /** A KOReader-style **cell bar**: [count] boxes filled up to the current level; tapping box i
      *  sets level i+1 (tapping the current top cell turns it off → 0). Repaints on tap. */
+    private var shownDialog: Dialog? = null
+
     private fun cellBar(count: Int, initial: Int, onSet: (Int) -> Unit): View {
         var filled = initial
         val draws = ArrayList<GradientDrawable>()
@@ -382,7 +390,26 @@ class AdjustSheetController(private val host: Host) {
                 host.repaintPanel()
             }
         }))
+        container.addView(settingRow("تعريض النص يمينًا ويسارًا", cellBar(8, prefs.cropSide) { level ->
+            prefs.cropSide = level
+            applyExtraCrop()
+        }))
+        container.addView(settingRow("تعريض النص أعلى وأسفل", cellBar(8, prefs.cropVert) { level ->
+            prefs.cropVert = level
+            applyExtraCrop()
+        }))
+        container.addView(settingRow("تحديد يدوي", segmented(listOf("تحديد المنطقة", "إزالة"), -1) { which ->
+            shownDialog?.dismiss()
+            if (which == 0) host.startManualCrop() else host.clearManualCrop()
+        }))
         return container
+    }
+
+    private fun applyExtraCrop() {
+        host.engineExecute {
+            try { NativeBridge.nativeSetCropExtra(host.docHandle, prefs.cropSide, prefs.cropVert) } catch (e: RuntimeException) {}
+            host.repaintPanel()
+        }
     }
 
     /** The "Page" tab: reflow Margin + Line Spacing + Alignment (EPUB; a toast on fixed-layout PDF). */

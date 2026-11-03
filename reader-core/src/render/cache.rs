@@ -41,6 +41,8 @@ pub struct PageHash {
     pub quality: u8,
     /// Contrast/display-enhancement step baked into the buffer (`0`=off; RR4).
     pub contrast: u8,
+    /// Manual crop rectangle + extra side/top trims, folded to one integer.
+    pub crop_extra: u32,
 }
 
 impl PageHash {
@@ -68,7 +70,15 @@ impl PageHash {
             crop_margin: 0,
             quality: 1,
             contrast: 0,
+            crop_extra: 0,
         }
+    }
+
+    /// Fold the manual-crop / extra-trim state into the key.
+    #[must_use]
+    pub fn with_crop_extra(mut self, extra: u32) -> Self {
+        self.crop_extra = extra;
+        self
     }
 
     /// Fold the page-view settings (RR4) into the key so a fit/crop/quality/contrast change keys a

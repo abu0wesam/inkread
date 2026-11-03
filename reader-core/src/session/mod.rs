@@ -144,6 +144,12 @@ pub struct ReaderSession {
     crop_auto: bool,
     /// Margin kept around the auto-crop, in 1%-of-page steps (RR4 — KOReader Margin).
     crop_margin: u8,
+    /// A user-drawn crop rectangle (page-normalized), applied to every page. Overrides auto-crop.
+    crop_manual: Option<NormRect>,
+    /// Extra trim of the left and right edges, in 2.5%-of-page steps (widens the text).
+    crop_side: u8,
+    /// Extra trim of the top and bottom edges, in 2.5%-of-page steps.
+    crop_vert: u8,
     /// Per-page content-bbox memo for auto-crop (recomputed when the page changes). Interior-mutable
     /// so the `&self` render path can cache the probe render.
     crop_cache: std::cell::RefCell<Option<(usize, Option<NormRect>)>>,

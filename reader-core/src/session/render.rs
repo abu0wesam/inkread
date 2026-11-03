@@ -186,6 +186,7 @@ impl ReaderSession {
             self.render_quality,
             self.contrast,
         )
+        .with_crop_extra(self.crop_extra_key())
     }
 
     /// Drop cached page renders whose content/geometry changed underneath their key — a reflow
@@ -200,26 +201,64 @@ impl ReaderSession {
     /// margins are trimmed to the detected content box; otherwise an aspect-preserving fit. PDF
     /// honors both; reflowable backends fall back to a full-buffer render.
     fn render_fit_or_crop(&self, buf: &mut PixelBuffer<'_>) -> CoreResult<()> {
-        match self
-            .crop_auto
-            .then(|| self.cached_crop_bbox(self.page))
-            .flatten()
-        {
-            Some(b) => {
-                let crop = self.expand_crop(b);
-                self.document.render_cropped(
-                    self.page,
-                    buf,
-                    crop,
-                    self.fit_mode,
-                    self.pan_x,
-                    self.pan_y,
-                )
-            }
+        match self.active_crop(self.page) {
+            Some(crop) => self.document.render_cropped(
+                self.page,
+                buf,
+                crop,
+                self.fit_mode,
+                self.pan_x,
+                self.pan_y,
+            ),
             None => self
                 .document
                 .render_fit(self.page, buf, self.fit_mode, self.pan_x, self.pan_y),
         }
+    }
+
+    /// The crop in force for `page` (page-normalized): the manual rectangle, else the auto-detected
+    /// content box, else the whole page — then trimmed by the left/right and top/bottom steps.
+    /// `None` = no crop at all.
+    pub(super) fn active_crop(&self, page: usize) -> Option<NormRect> {
+        let base = if self.crop_manual.is_some() {
+            self.crop_manual
+        } else if self.crop_auto {
+            self.cached_crop_bbox(page).map(|b| self.expand_crop(b))
+        } else {
+            None
+        };
+        if base.is_none() && self.crop_side == 0 && self.crop_vert == 0 {
+            return None;
+        }
+        let b = base.unwrap_or(NormRect {
+            x0: 0.0,
+            y0: 0.0,
+            x1: 1.0,
+            y1: 1.0,
+        });
+        let dx = f32::from(self.crop_side) * 0.025;
+        let dy = f32::from(self.crop_vert) * 0.025;
+        let r = NormRect {
+            x0: b.x0 + dx,
+            y0: b.y0 + dy,
+            x1: b.x1 - dx,
+            y1: b.y1 - dy,
+        };
+        if r.x1 - r.x0 < 0.2 || r.y1 - r.y0 < 0.2 {
+            return Some(b);
+        }
+        Some(r)
+    }
+
+    /// A stable integer for the manual rectangle and extra trims, folded into the render-cache key.
+    fn crop_extra_key(&self) -> u32 {
+        let mut h = u32::from(self.crop_side) | (u32::from(self.crop_vert) << 4);
+        if let Some(m) = self.crop_manual {
+            for v in [m.x0, m.y0, m.x1, m.y1] {
+                h = h.wrapping_mul(31).wrapping_add((v * 1000.0) as u32 + 1);
+            }
+        }
+        h
     }
 
     /// The content bounding box for `page`, memoized per page (recomputed on a page change).

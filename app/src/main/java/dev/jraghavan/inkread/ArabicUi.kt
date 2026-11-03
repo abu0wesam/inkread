@@ -23,10 +23,12 @@ object ArabicUi {
         if (fontLoaded) return
         try {
             val face = Typeface.createFromAsset(c.assets, "fonts/FreeSerif.ttf")
-            Ink.serif = face
-            Ink.serifItalic = face
-            Ink.serifBold = Typeface.create(face, Typeface.BOLD)
-            Ink.mono = face
+            // Bold throughout: thin strokes wash out on e-ink.
+            val bold = Typeface.create(face, Typeface.BOLD)
+            Ink.serif = bold
+            Ink.serifItalic = bold
+            Ink.serifBold = bold
+            Ink.mono = bold
             fontLoaded = true
         } catch (_: Exception) {
             // Keep the system faces.

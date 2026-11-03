@@ -38,6 +38,16 @@ class DisplayPrefs(private val context: Context) {
         get() = display.getInt("crop_margin", 1).coerceIn(0, 8)
         set(v) = display.edit().putInt("crop_margin", v).apply()
 
+    /** Extra trim of the left and right edges (text widening), 0..8 steps. */
+    var cropSide: Int
+        get() = display.getInt("crop_side", 0).coerceIn(0, 8)
+        set(v) = display.edit().putInt("crop_side", v).apply()
+
+    /** Extra trim of the top and bottom edges, 0..8 steps. */
+    var cropVert: Int
+        get() = display.getInt("crop_vert", 0).coerceIn(0, 8)
+        set(v) = display.edit().putInt("crop_vert", v).apply()
+
     /** Page fit mode; the index mirrors the core `FitMode` code (0 = Page/contain). */
     var fit: Int
         get() = display.getInt("fit", 0)

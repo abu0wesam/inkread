@@ -22,6 +22,8 @@ enum class Tool(val label: String, val iconRes: Int, val hint: String?) {
     // live-ink overlay, taking everything written since the switch off the panel (#254). The ringed
     // Pen icon is the feedback. The other tools don't ride the firmware overlay.
     PEN("القلم", R.drawable.ic_tool_pen, null),
+    // A second pen: same ink, drawn by the app itself with rounded corners and a 0.1–1.0 width ladder.
+    SMOOTH("قلم ناعم", R.drawable.ic_tool_smooth, null),
     HIGHLIGHTER("تظليل", R.drawable.ic_tool_highlighter, "Highlighter — drag over text; tap again to change shade"),
     ERASER("الممحاة", R.drawable.ic_tool_eraser, "Eraser — drag over ink to remove it, or flip the pen from any tool"),
     LASSO("الحلقة", R.drawable.ic_tool_lasso, "Lasso — circle strokes to select; tap Lasso again to switch Smart/Freehand"),

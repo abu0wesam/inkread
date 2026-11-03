@@ -251,6 +251,12 @@ object NativeBridge {
      *  keeps a margin around the detected content. PDF only; re-render after. */
     external fun nativeSetCrop(handle: Long, auto: Int, marginStep: Int)
 
+    /** Extra trim of the left/right ([side]) and top/bottom ([vert]) edges, 0..8 steps of 2.5%. */
+    external fun nativeSetCropExtra(handle: Long, side: Int, vert: Int)
+
+    /** Manual crop: a rectangle drawn on the uncropped page, viewport-normalized. Empty clears it. */
+    external fun nativeSetCropRect(handle: Long, x0: Float, y0: Float, x1: Float, y1: Float)
+
     /** Render quality (0=low, 1=default, 2=high; RR4). High supersamples for smoother text.
      *  Re-render after calling. */
     external fun nativeSetRenderQuality(handle: Long, quality: Int)

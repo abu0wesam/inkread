@@ -114,6 +114,46 @@ pub extern "system" fn Java_dev_jraghavan_inkread_NativeBridge_nativeSetCrop<'lo
     .resolve::<jni::errors::ThrowRuntimeExAndDefault>()
 }
 
+// nativeSetCropExtra(handle, side, vert) — extra left/right and top/bottom trim steps (0..=8).
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_jraghavan_inkread_NativeBridge_nativeSetCropExtra<'local>(
+    mut env: EnvUnowned<'local>,
+    _class: JClass<'local>,
+    handle: jlong,
+    side: jint,
+    vert: jint,
+) {
+    env.with_env(|env| -> jni::errors::Result<()> {
+        let session = unsafe { session_mut(handle) }.map_err(|e| throw(env, &e))?;
+        session.set_crop_extra(
+            u8::try_from(side.max(0)).unwrap_or(u8::MAX),
+            u8::try_from(vert.max(0)).unwrap_or(u8::MAX),
+        );
+        Ok(())
+    })
+    .resolve::<jni::errors::ThrowRuntimeExAndDefault>()
+}
+
+// nativeSetCropRect(handle, x0, y0, x1, y1) — a manual crop drawn on the current uncropped page, in
+// viewport-normalized coordinates; an empty rectangle clears it.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_jraghavan_inkread_NativeBridge_nativeSetCropRect<'local>(
+    mut env: EnvUnowned<'local>,
+    _class: JClass<'local>,
+    handle: jlong,
+    x0: jfloat,
+    y0: jfloat,
+    x1: jfloat,
+    y1: jfloat,
+) {
+    env.with_env(|env| -> jni::errors::Result<()> {
+        let session = unsafe { session_mut(handle) }.map_err(|e| throw(env, &e))?;
+        session.set_crop_manual_from_view(x0, y0, x1, y1);
+        Ok(())
+    })
+    .resolve::<jni::errors::ThrowRuntimeExAndDefault>()
+}
+
 // nativeSetViewport(handle, width, height, dpi) — update the render viewport after a surface
 // resize / screen rotation (RR21-FR4). Without this the core keeps the open-time viewport and a
 // render into the new (resized) buffer is rejected as a size mismatch. PDF re-renders at the new

@@ -155,6 +155,9 @@ impl ReaderSession {
             fit_mode: FitMode::Page,
             crop_auto: false,
             crop_margin: 0,
+            crop_manual: None,
+            crop_side: 0,
+            crop_vert: 0,
             crop_cache: std::cell::RefCell::new(None),
             render_quality: 1,
         }

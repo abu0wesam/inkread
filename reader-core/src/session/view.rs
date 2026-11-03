@@ -64,6 +64,46 @@ impl ReaderSession {
         self.crop_margin
     }
 
+    /// Set the extra left/right and top/bottom trim steps (0..=8 each, 2.5% of the page per step).
+    pub fn set_crop_extra(&mut self, side: u8, vert: u8) {
+        self.crop_side = side.min(8);
+        self.crop_vert = vert.min(8);
+    }
+
+    /// Set (or, with an empty rectangle, clear) the manual crop from a rectangle the reader drew in
+    /// **viewport-normalized** coordinates on the current, uncropped page. It is mapped back to
+    /// page space through the same fit transform the page was drawn with.
+    pub fn set_crop_manual_from_view(&mut self, x0: f32, y0: f32, x1: f32, y1: f32) {
+        if !(x1 - x0 > 0.05 && y1 - y0 > 0.05) {
+            self.crop_manual = None;
+            return;
+        }
+        let t = self.document.page_fit_transform(
+            self.page,
+            self.viewport.width,
+            self.viewport.height,
+            self.fit_mode,
+            self.pan_x,
+            self.pan_y,
+            None,
+        );
+        let (sx, ox, sy, oy) = t.unwrap_or((1.0, 0.0, 1.0, 0.0));
+        let back = |v: f32, s: f32, o: f32| {
+            if s.abs() > 1e-6 {
+                ((v - o) / s).clamp(0.0, 1.0)
+            } else {
+                v
+            }
+        };
+        let r = NormRect {
+            x0: back(x0, sx, ox),
+            y0: back(y0, sy, oy),
+            x1: back(x1, sx, ox),
+            y1: back(y1, sy, oy),
+        };
+        self.crop_manual = (r.x1 - r.x0 > 0.05 && r.y1 - r.y0 > 0.05).then_some(r);
+    }
+
     /// Set render quality (`0` = low, `1` = default, `2` = high; clamped) — RR4. Re-render to apply.
     pub fn set_render_quality(&mut self, q: u8) {
         self.render_quality = q.min(2);

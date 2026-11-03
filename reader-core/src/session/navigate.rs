@@ -130,12 +130,7 @@ impl ReaderSession {
         if self.zoom > 1.0 + 1e-3 {
             return None;
         }
-        let crop = if self.crop_auto {
-            self.cached_crop_bbox(self.page)
-                .map(|b| self.expand_crop(b))
-        } else {
-            None
-        };
+        let crop = self.active_crop(self.page);
         self.document.page_fit_transform(
             self.page,
             self.viewport.width,

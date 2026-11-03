@@ -47,8 +47,9 @@ class ToolRoutingTest {
      *  so what was written right after the switch vanished (#254). Every other tool keeps its hint. */
     @Test
     fun onlyPenHasNoHint() {
+        assertNull(Tool.SMOOTH.hint)
         assertNull(Tool.PEN.hint)
-        for (tool in Tool.entries - Tool.PEN) assertNotNull("$tool hint", tool.hint)
+        for (tool in Tool.entries - Tool.PEN - Tool.SMOOTH) assertNotNull("$tool hint", tool.hint)
     }
 
     /** Re-tapping Lasso always names the new mode; only the "how to switch" tail is a tip (#284). */
