@@ -315,8 +315,24 @@ fn fallback_chain() -> Vec<Arc<FontVec>> {
     };
     bundled_fallback()
         .into_iter()
+        .chain(arabic_fallback())
         .chain(extras.iter().cloned())
         .collect()
+}
+
+/// Fallback for Arabic script: the bundled Free Serif covers Arabic and its presentation forms,
+/// which none of the Latin reading faces do. Parsed once from the bytes already compiled in.
+fn arabic_fallback() -> Option<Arc<FontVec>> {
+    static ARABIC: OnceLock<Option<Arc<FontVec>>> = OnceLock::new();
+    ARABIC
+        .get_or_init(|| {
+            READING_FONTS
+                .iter()
+                .find(|f| f.name == "Free Serif")
+                .and_then(|f| FontVec::try_from_vec(f.regular.to_vec()).ok())
+                .map(Arc::new)
+        })
+        .clone()
 }
 
 /// Parse a bundled face; `None` if the bytes aren't a usable TTF/OTF.

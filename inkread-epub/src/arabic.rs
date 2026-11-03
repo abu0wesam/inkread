@@ -191,7 +191,11 @@ pub fn shape(s: &str) -> String {
 }
 
 fn prev_visible(chars: &[char], i: usize) -> Option<char> {
-    chars[..i].iter().rev().copied().find(|c| !is_transparent(*c))
+    chars[..i]
+        .iter()
+        .rev()
+        .copied()
+        .find(|c| !is_transparent(*c))
 }
 
 fn next_visible(chars: &[char], i: usize) -> Option<char> {
@@ -384,7 +388,10 @@ mod tests {
     #[test]
     fn a_dual_joining_word_gets_initial_medial_final_forms() {
         // ba, seen, meem
-        assert_eq!(shape("\u{0628}\u{0633}\u{0645}"), "\u{FE91}\u{FEB4}\u{FEE2}");
+        assert_eq!(
+            shape("\u{0628}\u{0633}\u{0645}"),
+            "\u{FE91}\u{FEB4}\u{FEE2}"
+        );
     }
 
     #[test]
@@ -406,7 +413,10 @@ mod tests {
     #[test]
     fn diacritics_do_not_break_a_join() {
         // ba + fatha + seen: the mark sits on ba and the pair still connects.
-        assert_eq!(shape("\u{0628}\u{064E}\u{0633}"), "\u{FE91}\u{064E}\u{FEB2}");
+        assert_eq!(
+            shape("\u{0628}\u{064E}\u{0633}"),
+            "\u{FE91}\u{064E}\u{FEB2}"
+        );
     }
 
     #[test]
@@ -454,20 +464,36 @@ mod tests {
 
     #[test]
     fn paragraph_direction_follows_the_first_strong_letter() {
-        assert!(is_rtl_paragraph("  \u{0645}\u{0631}\u{062D}\u{0628}\u{0627} hello"));
-        assert!(!is_rtl_paragraph("hello \u{0645}\u{0631}\u{062D}\u{0628}\u{0627}"));
+        assert!(is_rtl_paragraph(
+            "  \u{0645}\u{0631}\u{062D}\u{0628}\u{0627} hello"
+        ));
+        assert!(!is_rtl_paragraph(
+            "hello \u{0645}\u{0631}\u{062D}\u{0628}\u{0627}"
+        ));
         assert!(!is_rtl_paragraph("123 ..."));
     }
 
     #[test]
     fn tashkeel_and_tatweel_can_be_stripped() {
-        assert_eq!(strip_tashkeel("\u{0628}\u{064E}\u{0633}"), "\u{0628}\u{0633}");
-        assert_eq!(strip_tatweel("\u{0628}\u{0640}\u{0633}"), "\u{0628}\u{0633}");
+        assert_eq!(
+            strip_tashkeel("\u{0628}\u{064E}\u{0633}"),
+            "\u{0628}\u{0633}"
+        );
+        assert_eq!(
+            strip_tatweel("\u{0628}\u{0640}\u{0633}"),
+            "\u{0628}\u{0633}"
+        );
     }
 
     #[test]
     fn digits_convert_both_ways() {
-        assert_eq!(to_arabic_indic_digits("2026"), "\u{0662}\u{0660}\u{0662}\u{0666}");
-        assert_eq!(to_western_digits("\u{0662}\u{0660}\u{06F2}\u{06F6}"), "2026");
+        assert_eq!(
+            to_arabic_indic_digits("2026"),
+            "\u{0662}\u{0660}\u{0662}\u{0666}"
+        );
+        assert_eq!(
+            to_western_digits("\u{0662}\u{0660}\u{06F2}\u{06F6}"),
+            "2026"
+        );
     }
 }

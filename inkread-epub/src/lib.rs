@@ -206,7 +206,9 @@ impl EpubPackage {
             chapters.push(Chapter {
                 href,
                 mime,
-                html: data.content().to_string(),
+                // Arabic letters are stored in their joined (presentation) forms so the
+                // glyph-by-glyph renderer draws connected words.
+                html: arabic::shape(data.content()),
             });
         }
 

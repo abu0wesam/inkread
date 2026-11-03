@@ -1238,8 +1238,19 @@ impl<'o> Pager<'o> {
         );
         let line_h = size * self.opts.line_spacing;
         let n = lines.len();
+        let rtl = is_rtl_inlines(inlines);
+        // An RTL line is laid out left-to-right and then mirrored, so a right-aligned book line
+        // is the flush-left case before the mirror.
+        let align = if rtl && align == Align::Right {
+            Align::Left
+        } else {
+            align
+        };
         for (i, mut runs) in lines.into_iter().enumerate() {
             align_line(&mut runs, align, self.measure, i + 1 == n, m);
+            if rtl {
+                mirror_rtl_line(&mut runs, self.measure, m);
+            }
             self.emit(runs, line_h, false);
         }
     }
@@ -1389,7 +1400,11 @@ impl<'o> Pager<'o> {
             }]);
         }
         let line_h = size * self.opts.line_spacing;
-        for runs in lines {
+        let rtl = is_rtl_inlines(inlines);
+        for mut runs in lines {
+            if rtl {
+                mirror_rtl_line(&mut runs, self.measure, m);
+            }
             self.emit(runs, line_h, false);
         }
     }
@@ -1487,6 +1502,53 @@ fn tokenize<'a>(
         }
     }
     toks
+}
+
+/// Whether a block reads right-to-left: its first strong letter is Arabic-script.
+fn is_rtl_inlines(inlines: &[Inline]) -> bool {
+    let text: String = inlines
+        .iter()
+        .filter_map(|i| match i {
+            Inline::Run(r) => Some(r.text.as_str()),
+            _ => None,
+        })
+        .collect::<Vec<_>>()
+        .join(" ");
+    crate::arabic::is_rtl_paragraph(&text)
+}
+
+/// Mirror a line laid out left-to-right into right-to-left: each run moves to the mirrored
+/// position across the measure and its characters are put in visual order. Runs of Latin words or
+/// numbers keep their left-to-right order among themselves, as the bidi algorithm would.
+fn mirror_rtl_line(runs: &mut [PlacedRun], measure: f32, m: &dyn Metrics) {
+    let is_ltr = |r: &PlacedRun| {
+        !crate::arabic::contains_arabic(&r.text) && r.text.chars().any(char::is_alphanumeric)
+    };
+    let widths: Vec<f32> = runs
+        .iter()
+        .map(|r| m.advance(&r.text, r.size_px, r.bold, r.italic))
+        .collect();
+    let mut i = 0;
+    while i < runs.len() {
+        let mut j = i + 1;
+        if is_ltr(&runs[i]) {
+            while j < runs.len() && is_ltr(&runs[j]) {
+                j += 1;
+            }
+        }
+        // `i..j` is one directional group: a single RTL run, or a stretch of LTR runs.
+        let left = runs[i].x;
+        let right = runs[j - 1].x + widths[j - 1];
+        for r in &mut runs[i..j] {
+            r.x = measure - right + (r.x - left);
+        }
+        i = j;
+    }
+    for r in runs.iter_mut() {
+        // A Latin word keeps its trailing punctuation on its own right ("Manta." not ".Manta").
+        let rtl_run = !is_ltr(r);
+        r.text = crate::arabic::to_visual(&r.text, rtl_run);
+    }
 }
 
 /// Re-position a line's runs for `align` (RR4). Runs come from [`break_lines`] flush-left; this

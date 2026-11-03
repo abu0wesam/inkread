@@ -19,7 +19,7 @@ name: CI
 
 on:
   push:
-    branches: [master, "feat/**"]
+    branches: [master, "feat/**", arabic-support]
   pull_request:
 
 env:
@@ -183,6 +183,11 @@ jobs:
             [[ "$listing" == *"$lib"* ]] || { echo "::error::$lib missing from $apk"; exit 1; }
           done
           echo "APK OK: $apk contains libreader.so + libpdfium.so (arm64-v8a)"
+      - name: Upload debug APK for device testing
+        uses: actions/upload-artifact@v4
+        with:
+          name: inkread-debug-apk
+          path: app/build/outputs/apk/debug/*.apk
 
   android-unit-tests:
     name: android unit tests (host JVM)
