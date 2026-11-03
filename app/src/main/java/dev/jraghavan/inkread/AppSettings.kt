@@ -19,6 +19,12 @@ object AppSettings {
     private const val KEY_TOOLBAR_ON_LEFT = "toolbar_on_left"
     private const val KEY_TOOL_TIPS = "tool_tips"
     private const val KEY_AUTO_TURN_INTERVAL_SEC = "auto_turn_interval_sec"
+    private const val KEY_FLIP_RTL = "flip_rtl"
+
+    /** Arabic page turning: a swipe left-to-right (or a tap on the left edge) goes forward. Default on. */
+    fun flipRtl(c: Context): Boolean = prefs(c).getBoolean(KEY_FLIP_RTL, true)
+
+    fun setFlipRtl(c: Context, value: Boolean) = prefs(c).edit().putBoolean(KEY_FLIP_RTL, value).apply()
     private const val KEY_OPDS_URL = "opds_url"
     private const val KEY_OPDS_USER = "opds_user"
     private const val KEY_OPDS_PASSWORD = "opds_password"

@@ -20,6 +20,8 @@ import android.widget.TextView
  * Views, like the rest of the shell; backed by [AppSettings].
  */
 class SettingsActivity : Activity() {
+    override fun attachBaseContext(newBase: android.content.Context) = super.attachBaseContext(ArabicUi.wrap(newBase))
+
 
     private val density get() = resources.displayMetrics.density
     private fun dp(v: Int) = (v * density).toInt()
@@ -58,13 +60,13 @@ class SettingsActivity : Activity() {
                 setPadding(0, 0, dp(16), 0)
             })
             addView(TextView(this@SettingsActivity).apply {
-                text = "Settings"; setTextColor(ink); textSize = 28f; typeface = serif
+                text = "الإعدادات"; setTextColor(ink); textSize = 28f; typeface = serif
             })
         })
         column.addView(spacer(dp(28)))
 
         // ── Export ───────────────────────────────────────────────────────────────
-        column.addView(eyebrow("Export"))
+        column.addView(eyebrow("تصدير"))
         column.addView(spacer(dp(12)))
         column.addView(
             toggleRow(
@@ -77,7 +79,7 @@ class SettingsActivity : Activity() {
 
         // ── Reading ────────────────────────────────────────────────────────────────
         column.addView(spacer(dp(34)))
-        column.addView(eyebrow("Reading"))
+        column.addView(eyebrow("القراءة"))
         column.addView(spacer(dp(12)))
         column.addView(
             toggleRow(
@@ -121,7 +123,7 @@ class SettingsActivity : Activity() {
 
         // ── Dictionary ─────────────────────────────────────────────────────────────
         column.addView(spacer(dp(34)))
-        column.addView(eyebrow("Dictionary"))
+        column.addView(eyebrow("القاموس"))
         column.addView(spacer(dp(12)))
         column.addView(
             toggleRow(
@@ -137,7 +139,7 @@ class SettingsActivity : Activity() {
 
         // ── Updates (ADR-INKREAD-0014) ───────────────────────────────────────────────
         column.addView(spacer(dp(34)))
-        column.addView(eyebrow("Updates"))
+        column.addView(eyebrow("التحديثات"))
         column.addView(spacer(dp(12)))
         column.addView(
             toggleRow(
@@ -163,7 +165,7 @@ class SettingsActivity : Activity() {
 
         // ── Library (ADR-INKREAD-0016) ─────────────────────────────────────────────
         column.addView(spacer(dp(34)))
-        column.addView(eyebrow("Library"))
+        column.addView(eyebrow("المكتبة"))
         column.addView(spacer(dp(12)))
         column.addView(
             actionRow(
@@ -179,15 +181,15 @@ class SettingsActivity : Activity() {
 
         // ── How it works ───────────────────────────────────────────────────────────
         column.addView(spacer(dp(34)))
-        column.addView(eyebrow("How it works"))
+        column.addView(eyebrow("طريقة العمل"))
         column.addView(spacer(dp(8)))
         for ((title, desc) in HELP) column.addView(helpRow(title, desc))
 
         // ── Quit (#168) ────────────────────────────────────────────────────────────
         column.addView(spacer(dp(34)))
-        column.addView(eyebrow("Quit"))
+        column.addView(eyebrow("إغلاق"))
         column.addView(spacer(dp(12)))
-        column.addView(actionRow("Quit inkread") { quit() })
+        column.addView(actionRow("إغلاق inkread") { quit() })
         column.addView(TextView(this).apply {
             text = "Closes inkread and clears it from recent apps. Your place in the book and any " +
                 "handwriting are saved first."
@@ -197,14 +199,14 @@ class SettingsActivity : Activity() {
 
         // ── About ──────────────────────────────────────────────────────────────────
         column.addView(spacer(dp(34)))
-        column.addView(eyebrow("About"))
+        column.addView(eyebrow("حول"))
         column.addView(spacer(dp(10)))
         column.addView(TextView(this).apply {
             text = "InkRead"; setTextColor(ink); textSize = 40f; typeface = Typeface.create(script, Typeface.BOLD)
             paint.isFakeBoldText = true; includeFontPadding = false
         })
         column.addView(TextView(this).apply {
-            text = "A handwriting-first reader for e-ink."
+            text = "قارئ يعتمد الكتابة بخط اليد للحبر الإلكتروني."
             setTextColor(inkSoft); textSize = 15f; typeface = serifItalic; setPadding(0, dp(4), 0, 0)
         })
         column.addView(TextView(this).apply {
@@ -243,8 +245,8 @@ class SettingsActivity : Activity() {
         AlertDialog.Builder(this, R.style.InkDialog)
             .setTitle("Overwrite originals on export?")
             .setMessage("Exporting will replace your original PDF with the annotated version instead of saving a separate “-annotated” copy. This can’t be undone.")
-            .setPositiveButton("Overwrite") { _, _ -> AppSettings.setOverwriteOnExport(this, true); refresh() }
-            .setNegativeButton("Keep safe copy", null)
+            .setPositiveButton("استبدال") { _, _ -> AppSettings.setOverwriteOnExport(this, true); refresh() }
+            .setNegativeButton("إبقاء نسخة آمنة", null)
             .show()
     }
 
@@ -284,7 +286,7 @@ class SettingsActivity : Activity() {
             setText(AppSettings.opdsUser(this@SettingsActivity)); setSingleLine()
         }
         val password = android.widget.EditText(this).apply {
-            hint = "Password"
+            hint = "كلمة المرور"
             setText(AppSettings.opdsPassword(this@SettingsActivity)); setSingleLine()
             inputType = android.text.InputType.TYPE_CLASS_TEXT or
                 android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
@@ -301,21 +303,21 @@ class SettingsActivity : Activity() {
             })
         }
         AlertDialog.Builder(this, R.style.InkDialog)
-            .setTitle("Your library")
+            .setTitle("مكتبتك")
             .setView(body)
-            .setPositiveButton("Save") { _, _ ->
+            .setPositiveButton("حفظ") { _, _ ->
                 AppSettings.setOpdsUrl(this, url.text.toString())
                 AppSettings.setOpdsUser(this, user.text.toString())
                 AppSettings.setOpdsPassword(this, password.text.toString())
                 refresh()
             }
-            .setNeutralButton("Forget") { _, _ ->
+            .setNeutralButton("نسيان") { _, _ ->
                 AppSettings.setOpdsUrl(this, "")
                 AppSettings.setOpdsUser(this, "")
                 AppSettings.setOpdsPassword(this, "")
                 refresh()
             }
-            .setNegativeButton("Cancel", null)
+            .setNegativeButton("إلغاء", null)
             .show()
     }
 
@@ -327,7 +329,7 @@ class SettingsActivity : Activity() {
             addView(TextView(this@SettingsActivity).apply {
                 text = title; setTextColor(ink); textSize = 17f; typeface = serif
             }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { marginEnd = dp(16) })
-            addView(pill("Check", false))
+            addView(pill("تحقق", false))
         }
 
     /** A setting with a title + description on the left and an On/Off pill on the right. */
@@ -346,7 +348,7 @@ class SettingsActivity : Activity() {
                     setLineSpacing(0f, 1.15f); setPadding(0, dp(3), 0, 0)
                 })
             }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { marginEnd = dp(16) })
-            addView(pill(if (on) "On" else "Off", on))
+            addView(pill(if (on) "On" else "إيقاف", on))
         }
 
     /** A bordered status pill — filled (black) when on, outlined when off. */
@@ -388,15 +390,15 @@ class SettingsActivity : Activity() {
     private companion object {
         /** Concise, accurate cheatsheet of the non-obvious features (title → one line). */
         val HELP = listOf(
-            "Pen & Highlighter" to "Write and highlight on the page with the stylus; the floating tool palette switches between them. Tap Pen or Highlighter again to pick a colour.",
-            "Eraser" to "Switch to the eraser in the tool palette to wipe strokes — or, if your pen has an eraser end, just flip it over.",
-            "Your library" to "Connect a calibre content server or Calibre-Web under Library, then browse it from Home and download books onto your shelf.",
-            "Lasso select" to "Circle ink or text to move, copy, delete, or look it up. Tap Lasso again to switch between Smart and Freehand.",
-            "Define" to "Select a word and tap Define to look it up in the on-device dictionaries.",
-            "Search" to "Find text anywhere in the document and jump between matches.",
-            "Bookmarks" to "Mark pages and return to them from the marks list.",
-            "Export" to "Save your annotations as a PDF into a synced folder — or overwrite the original (see above).",
-            "Display & Font" to "Tune contrast, margins, page crop, and reflow font from the reader’s Adjust sheet.",
+            "القلم والتظليل" to "Write and highlight on the page with the stylus; the floating tool palette switches between them. Tap Pen or Highlighter again to pick a colour.",
+            "الممحاة" to "Switch to the eraser in the tool palette to wipe strokes — or, if your pen has an eraser end, just flip it over.",
+            "مكتبتك" to "Connect a calibre content server or Calibre-Web under Library, then browse it from Home and download books onto your shelf.",
+            "تحديد بالحلقة" to "Circle ink or text to move, copy, delete, or look it up. Tap Lasso again to switch between Smart and Freehand.",
+            "تعريف" to "Select a word and tap Define to look it up in the on-device dictionaries.",
+            "بحث" to "Find text anywhere in the document and jump between matches.",
+            "العلامات" to "Mark pages and return to them from the marks list.",
+            "تصدير" to "Save your annotations as a PDF into a synced folder — or overwrite the original (see above).",
+            "العرض والخط" to "Tune contrast, margins, page crop, and reflow font from the reader’s Adjust sheet.",
         )
     }
 }

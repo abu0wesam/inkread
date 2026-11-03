@@ -78,7 +78,7 @@ class SearchController(private val host: Host) {
             inputType = InputType.TYPE_CLASS_TEXT
             imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH
             setSingleLine(true)
-            hint = "Find in document"
+            hint = "بحث في المستند"
             setText(query)
             setSelection(text?.length ?: 0)
         }
@@ -89,11 +89,11 @@ class SearchController(private val host: Host) {
             addView(input, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         }
         val builder = AlertDialog.Builder(activity, R.style.InkDialog)
-            .setTitle("Search")
+            .setTitle("بحث")
             .setView(wrap)
-            .setPositiveButton("Search") { _, _ -> runSearch(input.text.toString()) }
-            .setNegativeButton("Cancel", null)
-        if (hits.isNotEmpty()) builder.setNeutralButton("Results") { _, _ -> showResults() }
+            .setPositiveButton("بحث") { _, _ -> runSearch(input.text.toString()) }
+            .setNegativeButton("إلغاء", null)
+        if (hits.isNotEmpty()) builder.setNeutralButton("النتائج") { _, _ -> showResults() }
         val dialog = builder.create()
         input.setOnEditorActionListener { _, actionId, _ ->
             if (actionId == android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH) {
@@ -115,9 +115,9 @@ class SearchController(private val host: Host) {
         // dialog lets the user abort a long full-document scan (the Cancel flips the volatile flag
         // the loop polls each page). Non-cancelable via back so the only exit is an explicit choice.
         val progress = AlertDialog.Builder(host.activity, R.style.InkDialog)
-            .setTitle("Searching…")
+            .setTitle("جارٍ البحث…")
             .setMessage("Scanning the document for “$q”.")
-            .setNegativeButton("Cancel") { _, _ -> searchCancelled = true }
+            .setNegativeButton("إلغاء") { _, _ -> searchCancelled = true }
             .setCancelable(false)
             .create()
         progress.show()
@@ -144,7 +144,7 @@ class SearchController(private val host: Host) {
             host.activity.runOnUiThread {
                 try { progress.dismiss() } catch (e: Exception) {}
                 when {
-                    aborted -> Toast.makeText(host.activity, "Search cancelled", Toast.LENGTH_SHORT).show()
+                    aborted -> Toast.makeText(host.activity, "أُلغي البحث", Toast.LENGTH_SHORT).show()
                     found.isEmpty() -> Toast.makeText(host.activity, "No matches for \"$q\"", Toast.LENGTH_SHORT).show()
                     // Open the results list and let the reader pick which hit to jump to — don't
                     // teleport to the first match (the list is the point of a search).

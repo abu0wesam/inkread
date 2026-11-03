@@ -252,18 +252,19 @@ class BottomBarController(private val host: Host) {
             })
             controls.addView(cell, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         }
+        control(R.drawable.ic_menu_back, "رجوع") { activity.finish() }
         // Reading a compiled Daily issue → a back-to-the-front-page control (DailyActivity is the
         // parent in the back stack, so finishing returns to the article list).
         if (host.requestedPath?.contains("/daily/") == true) {
-            control(R.drawable.ic_menu_contents, "Daily") { activity.finish() }
+            control(R.drawable.ic_menu_contents, "الصحيفة") { activity.finish() }
         }
         // "Home" already opens the library home, so a separate Library item here is redundant.
-        control(R.drawable.ic_menu_home, "Home") { goHome() }
+        control(R.drawable.ic_menu_home, "الرئيسية") { goHome() }
         // (Bookmark toggle moved to the top-right corner dog-ear; "Marks" lists them.)
-        control(R.drawable.ic_menu_marks, "Marks") { showBookmarks() }
-        control(R.drawable.ic_tool_pen, "Notes") { showAnnotations() }
-        control(R.drawable.ic_menu_contents, "Contents") { showContentsLazy() }
-        control(R.drawable.ic_menu_search, "Search") { host.openSearch() }
+        control(R.drawable.ic_menu_marks, "العلامات") { showBookmarks() }
+        control(R.drawable.ic_tool_pen, "الملاحظات") { showAnnotations() }
+        control(R.drawable.ic_menu_contents, "الفهرس") { showContentsLazy() }
+        control(R.drawable.ic_menu_search, "بحث") { host.openSearch() }
         // Quick zoom (circle −/+ icons — not magnifiers, which are reserved for Search). Also in Adjust → Zoom.
         // Stepwise either way: reaching a comfortable size takes several taps, and dismissing after
         // each one made every step cost reopening the bar (#164).
@@ -273,19 +274,28 @@ class BottomBarController(private val host: Host) {
         // changed the text size instead (#212). Same buttons, same intent, wired to whichever of
         // the two the document actually supports, and labelled for it.
         if (host.magnifiable) {
-            control(R.drawable.ic_menu_zoom_out, "Zoom −", staysOpen = true) { host.zoomOut() }
-            control(R.drawable.ic_menu_zoom_in, "Zoom +", staysOpen = true) { host.zoomIn() }
+            control(R.drawable.ic_menu_zoom_out, "تصغير", staysOpen = true) { host.zoomOut() }
+            control(R.drawable.ic_menu_zoom_in, "تكبير", staysOpen = true) { host.zoomIn() }
         } else {
-            control(R.drawable.ic_menu_zoom_out, "Text −", staysOpen = true) { host.textSmaller() }
-            control(R.drawable.ic_menu_zoom_in, "Text +", staysOpen = true) { host.textLarger() }
+            control(R.drawable.ic_menu_zoom_out, "خط −", staysOpen = true) { host.textSmaller() }
+            control(R.drawable.ic_menu_zoom_in, "خط +", staysOpen = true) { host.textLarger() }
         }
-        control(R.drawable.ic_menu_export, "Export") { host.openExport() }
-        control(R.drawable.ic_menu_dict, "Dicts") { host.openDicts() }
+        control(R.drawable.ic_menu_export, "تصدير") { host.openExport() }
+        control(R.drawable.ic_menu_dict, "القواميس") { host.openDicts() }
         // Document controls consolidated into one KOReader-style tabbed sheet (Rotate/Fit/Font/Display).
-        control(R.drawable.ic_menu_adjust, "Adjust") { host.openAdjust() }
-        control(R.drawable.ic_menu_autoturn, "Auto") { showAutoTurn() } // hands-free page-turn (#97)
-        control(R.drawable.ic_menu_refresh, "Refresh") { host.refreshNow() } // manual full flash (#99)
-        control(R.drawable.ic_menu_open, "Open") { host.openPicker() }
+        control(R.drawable.ic_menu_adjust, "تعديل") { host.openAdjust() }
+        control(R.drawable.ic_menu_flip, if (AppSettings.flipRtl(activity)) "تقليب ←" else "تقليب →") {
+            val rtl = !AppSettings.flipRtl(activity)
+            AppSettings.setFlipRtl(activity, rtl)
+            android.widget.Toast.makeText(
+                activity,
+                if (rtl) "التقليب عربي: اسحب من اليسار إلى اليمين للصفحة التالية"
+                else "التقليب إنجليزي: اسحب من اليمين إلى اليسار للصفحة التالية",
+                android.widget.Toast.LENGTH_LONG,
+            ).show()
+        }
+        control(R.drawable.ic_menu_refresh, "تحديث") { host.refreshNow() } // manual full flash (#99)
+        control(R.drawable.ic_menu_open, "فتح") { host.openPicker() }
         container.addView(controls)
 
         // Palm guard: a hand resting on the bottom-anchored bar must not press a control (esp. Home).
@@ -303,7 +313,7 @@ class BottomBarController(private val host: Host) {
     private fun chapterJump(dir: Int) {
         val starts = host.chapters.map { it.first }
         if (starts.isEmpty()) {
-            Toast.makeText(activity, "No chapters in this document", Toast.LENGTH_SHORT).show()
+            Toast.makeText(activity, "لا فصول في هذا المستند", Toast.LENGTH_SHORT).show()
             return
         }
         val cur = host.currentPage
@@ -311,7 +321,7 @@ class BottomBarController(private val host: Host) {
         if (target != null) {
             host.postJump(target)
         } else {
-            Toast.makeText(activity, if (dir > 0) "Last chapter" else "First chapter", Toast.LENGTH_SHORT).show()
+            Toast.makeText(activity, if (dir > 0) "آخر فصل" else "أول فصل", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -362,7 +372,7 @@ class BottomBarController(private val host: Host) {
             hint = "1 – $total"
         }
         AlertDialog.Builder(activity, R.style.InkDialog)
-            .setTitle("Go to page")
+            .setTitle("انتقل إلى صفحة")
             .setView(input)
             .setPositiveButton("Go") { _, _ ->
                 val n = input.text.toString().toIntOrNull()
@@ -372,7 +382,7 @@ class BottomBarController(private val host: Host) {
                     Toast.makeText(activity, "Enter a page from 1 to $total", Toast.LENGTH_SHORT).show()
                 }
             }
-            .setNegativeButton("Cancel", null)
+            .setNegativeButton("إلغاء", null)
             .show()
     }
 
@@ -386,7 +396,7 @@ class BottomBarController(private val host: Host) {
         val remembered = host.autoTurnIntervalSec
         val labels = Array(presets.size + 1) { i ->
             if (i == 0) {
-                "Off"
+                "إيقاف"
             } else {
                 val s = presets[i - 1]
                 if (s == remembered) "Every ${s}s  •" else "Every ${s}s" // bullet marks the last-used pace
@@ -420,12 +430,12 @@ class BottomBarController(private val host: Host) {
             val marks = host.bookmarks?.pages() ?: emptyList()
             runOnUiThread {
                 if (marks.isEmpty()) {
-                    Toast.makeText(activity, "No bookmarks yet — tap Bookmark to add one", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(activity, "لا علامات بعد — اضغط على لسان العلامة لإضافتها", Toast.LENGTH_SHORT).show()
                     return@runOnUiThread
                 }
                 val labels = marks.map { "Page ${it + 1}" }.toTypedArray()
                 AlertDialog.Builder(activity, R.style.InkDialog)
-                    .setTitle("Bookmarks")
+                    .setTitle("العلامات")
                     .setItems(labels) { _, which -> host.postJump(marks[which]) }
                     .show()
             }
@@ -444,7 +454,7 @@ class BottomBarController(private val host: Host) {
             }
             runOnUiThread {
                 if (toc.isEmpty()) {
-                    Toast.makeText(activity, "No contents in this document", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(activity, "لا فهرس في هذا المستند", Toast.LENGTH_SHORT).show()
                 } else {
                     showContents(toc)
                 }
@@ -470,7 +480,7 @@ class BottomBarController(private val host: Host) {
             }
             runOnUiThread {
                 if (items.isEmpty()) {
-                    Toast.makeText(activity, "No handwritten notes yet", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(activity, "لا ملاحظات بخط اليد بعد", Toast.LENGTH_SHORT).show()
                 } else {
                     showAnnotationsList(items)
                 }
@@ -485,7 +495,7 @@ class BottomBarController(private val host: Host) {
             orientation = LinearLayout.VERTICAL
             setPadding(Ink.sdp(24), Ink.sdp(22), Ink.sdp(24), Ink.sdp(14))
         }
-        outer.addView(Ink.eyebrow(activity, "Annotations"))
+        outer.addView(Ink.eyebrow(activity, "التعليقات"))
         outer.addView(Ink.gap(activity, 10))
         outer.addView(Ink.rule(activity))
         outer.addView(Ink.gap(activity, 4))
@@ -505,7 +515,7 @@ class BottomBarController(private val host: Host) {
                     setTextColor(Ink.ink); textSize = Ink.sp(17f); typeface = Ink.serifBold
                 }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
                 addView(TextView(activity).apply {
-                    text = if (count == 1) "1 note" else "$count notes"
+                    text = if (count == 1) "ملاحظة واحدة" else "$count notes"
                     setTextColor(Ink.muted); textSize = Ink.sp(12f); typeface = Ink.mono
                 })
             })
@@ -529,7 +539,7 @@ class BottomBarController(private val host: Host) {
             orientation = LinearLayout.VERTICAL
             setPadding(Ink.sdp(24), Ink.sdp(22), Ink.sdp(24), Ink.sdp(14))
         }
-        outer.addView(Ink.eyebrow(activity, "Contents"))
+        outer.addView(Ink.eyebrow(activity, "الفهرس"))
         outer.addView(Ink.gap(activity, 10))
         outer.addView(Ink.rule(activity))
         outer.addView(Ink.gap(activity, 4))

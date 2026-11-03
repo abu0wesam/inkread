@@ -35,6 +35,8 @@ import java.util.Locale
  * compiled issue, the populated front page.
  */
 class DailyActivity : Activity() {
+    override fun attachBaseContext(newBase: android.content.Context) = super.attachBaseContext(ArabicUi.wrap(newBase))
+
 
     private val density get() = resources.displayMetrics.density
     private fun dp(v: Int) = (v * density).toInt()

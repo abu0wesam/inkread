@@ -84,7 +84,7 @@ class PageOverlays(private val host: Host) {
     /** Where the ribbon falls for a `viewW`-wide panel. Pure. */
     fun ribbon(viewW: Int = host.viewW): Ribbon {
         val w = viewW.toFloat()
-        val rw = w * 0.035f // ribbon width
+        val rw = w * 0.022f // ribbon width
         val right = w - rw * 1.4f // inset from the right edge
         return Ribbon(left = right - rw, right = right, length = rw * 2.1f, notch = rw * 0.45f)
     }

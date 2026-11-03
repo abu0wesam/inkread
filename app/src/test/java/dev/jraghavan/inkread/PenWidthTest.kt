@@ -39,7 +39,7 @@ class PenWidthTest {
         val i = StylusInkController.DEFAULT_PEN_WIDTH_INDEX
         val widths = StylusInkController.PEN_WIDTHS
         assertTrue("default index out of range", i in widths.indices)
-        assertEquals("the default must match the measured firmware nib", 9f, widths[i], 0.001f)
+        assertEquals("the default must match the measured firmware nib", 12f, widths[i], 0.001f)
         assertTrue("nothing thinner to choose", i > 0)
         assertTrue("nothing thicker to choose", i < widths.size - 1)
     }

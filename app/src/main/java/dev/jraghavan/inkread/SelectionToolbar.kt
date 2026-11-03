@@ -12,13 +12,13 @@ import android.widget.PopupWindow
 
 /** A lasso-selection operation (ADR-INKREAD-0010), mirroring NeoReader's selection menu. */
 enum class SelAction(val label: String, val iconRes: Int) {
-    DELETE("Delete", R.drawable.ic_sel_delete),
-    CUT("Cut", R.drawable.ic_sel_cut),
-    COPY("Copy", R.drawable.ic_sel_copy),
-    PASTE("Paste", R.drawable.ic_sel_paste),
-    SELECT_ALL("Select all", R.drawable.ic_sel_all),
-    DIGEST("Add to Digest", R.drawable.ic_sel_digest),
-    DONE("Done", R.drawable.ic_sel_done),
+    DELETE("حذف", R.drawable.ic_sel_delete),
+    CUT("قص", R.drawable.ic_sel_cut),
+    COPY("نسخ", R.drawable.ic_sel_copy),
+    PASTE("لصق", R.drawable.ic_sel_paste),
+    SELECT_ALL("تحديد الكل", R.drawable.ic_sel_all),
+    DIGEST("أضف للخلاصة", R.drawable.ic_sel_digest),
+    DONE("تم", R.drawable.ic_sel_done),
 }
 
 /**

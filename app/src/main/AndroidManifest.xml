@@ -64,8 +64,38 @@
         <!-- The reader; launched from Home with a book / pick / resume extra (not exported). -->
         <activity
             android:name=".ReaderActivity"
-            android:exported="false"
-            android:configChanges="orientation|screenSize|keyboardHidden" />
+            android:exported="true"
+            android:configChanges="orientation|screenSize|keyboardHidden">
+            <!-- "Open with…" / Share from other apps (EPUB, PDF, CBZ, text). -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="content" />
+                <data android:scheme="file" />
+                <data android:mimeType="application/epub+zip" />
+                <data android:mimeType="application/pdf" />
+                <data android:mimeType="application/x-cbz" />
+                <data android:mimeType="application/vnd.comicbook+zip" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="file" />
+                <data android:scheme="content" />
+                <data android:mimeType="*/*" />
+                <data android:pathPattern=".*\\.epub" />
+                <data android:pathPattern=".*\\.pdf" />
+                <data android:pathPattern=".*\\.cbz" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="application/epub+zip" />
+                <data android:mimeType="application/pdf" />
+            </intent-filter>
+        </activity>
 
         <!-- App-level settings + help, launched from the Home gear (not exported). -->
         <activity

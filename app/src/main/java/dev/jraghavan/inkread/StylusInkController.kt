@@ -439,10 +439,10 @@ class StylusInkController(private val host: Host) {
          * avoid that, and the highlighter — which does exactly that — is the reason not to (#126).
          */
         val PEN_WIDTHS = floatArrayOf(4f, 6f, 9f, 12f, 16f)
-        val PEN_WIDTH_NAMES = arrayOf("Fine", "Thin", "Medium", "Bold", "Heavy")
+        val PEN_WIDTH_NAMES = arrayOf("رفيع", "نحيف", "متوسط", "عريض", "ثقيل")
 
         /** Index of the width that matches the firmware nib; see [PEN_WIDTHS]. */
-        const val DEFAULT_PEN_WIDTH_INDEX = 2
+        const val DEFAULT_PEN_WIDTH_INDEX = 3
 
         const val HIGHLIGHT_WIDTH_PX = 30f // wide marker band (vs the pen's PEN_WIDTHS).
         const val ERASE_RADIUS_PX = 22f // eraser hit radius (px): a stroke within this of the path goes.

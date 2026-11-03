@@ -34,6 +34,8 @@ import java.util.concurrent.Executors
  * library.
  */
 class OpdsActivity : Activity() {
+    override fun attachBaseContext(newBase: android.content.Context) = super.attachBaseContext(ArabicUi.wrap(newBase))
+
 
     private val density get() = resources.displayMetrics.density
     private fun dp(v: Int) = (v * density).toInt()

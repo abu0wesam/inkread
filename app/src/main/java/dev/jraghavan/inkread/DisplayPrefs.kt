@@ -48,7 +48,7 @@ class DisplayPrefs(private val context: Context) {
         set(o) = display.edit().putInt("orientation", o).apply()
 
     var stylePreset: String
-        get() = display.getString("style_preset", "Original") ?: "Original"
+        get() = display.getString("style_preset", "الأصلي") ?: "الأصلي"
         set(name) = display.edit().putString("style_preset", name).apply()
 
     var renderQuality: Int
@@ -176,10 +176,10 @@ class DisplayPrefs(private val context: Context) {
         // Line-spacing multipliers (RR4), tight → loose. Stored as the value (not the index) so this
         // set can grow without corrupting saved prefs. 1.4 = the core default.
         val LINE_SPACINGS = floatArrayOf(1.0f, 1.1f, 1.2f, 1.4f, 1.7f)
-        val LINE_SPACING_LABELS = listOf("Tightest", "Tighter", "Small", "Medium", "Large")
+        val LINE_SPACING_LABELS = listOf("أضيق", "ضيق", "صغير", "متوسط", "كبير")
         const val DEFAULT_LINE_SPACING = 1.4f
 
-        val STYLE_PRESETS = listOf("Original", "Bold", "Night", "Outdoor", "Relaxed") // 1.10
+        val STYLE_PRESETS = listOf("الأصلي", "عريض", "ليلي", "خارجي", "مريح") // 1.10
 
         /** Reflow font-size steps (multiples of the core's base body size); 1.0 = default. */
         val TEXT_SCALES = floatArrayOf(0.6f, 0.7f, 0.8f, 0.9f, 1.0f, 1.15f, 1.3f, 1.5f, 1.75f, 2.0f, 2.5f, 3.0f)
@@ -235,14 +235,14 @@ class DisplayPrefs(private val context: Context) {
          *  margins narrower than the default, and the Supernote bezel already eats usable width;
          *  the top of the range stops where the measure gets too short to read. */
         val MARGINS = listOf(0, 2, 4, 6, 9, 12)
-        val MARGIN_LABELS = listOf("None", "XS", "S", "M", "L", "XL")
+        val MARGIN_LABELS = listOf("بدون", "XS", "S", "M", "L", "XL")
 
         /** Mirrors `reader-core`'s `DEFAULT_MARGIN_PCT` — the layout engine's own proportional
          *  default, so an unadjusted book paginates exactly as it did before this was settable. */
         const val DEFAULT_MARGIN_PCT = 6
 
         val REFRESH_INTERVALS = listOf(0, 1, 3, 5, 10)
-        val REFRESH_INTERVAL_LABELS = listOf("Off", "1", "3", "5", "10")
+        val REFRESH_INTERVAL_LABELS = listOf("إيقاف", "1", "3", "5", "10")
 
         /** Index of the entry in [values] nearest to [target]. */
         private fun nearestIndex(values: FloatArray, target: Float): Int {

@@ -35,10 +35,10 @@ object Ink {
     val paper = Color.WHITE
 
     // ── Type — the Inkwell voice (serif display, mono labels) ──
-    val serif: Typeface = Typeface.SERIF
-    val serifItalic: Typeface = Typeface.create(Typeface.SERIF, Typeface.ITALIC)
-    val serifBold: Typeface = Typeface.create(Typeface.SERIF, Typeface.BOLD)
-    val mono: Typeface = Typeface.MONOSPACE
+    @JvmField var serif: Typeface = Typeface.SERIF
+    @JvmField var serifItalic: Typeface = Typeface.create(Typeface.SERIF, Typeface.ITALIC)
+    @JvmField var serifBold: Typeface = Typeface.create(Typeface.SERIF, Typeface.BOLD)
+    @JvmField var mono: Typeface = Typeface.MONOSPACE
 
     // ── Metrics (system density → no Context needed) ──
     private val density = android.content.res.Resources.getSystem().displayMetrics.density

@@ -59,7 +59,7 @@ class DictController(private val host: Host) {
         if (host.docHandle == 0L) return
         val word = wordAt(page, nx, ny)
         if (word == null) {
-            runOnUiThread { Toast.makeText(activity, "No word there", Toast.LENGTH_SHORT).show() }
+            runOnUiThread { Toast.makeText(activity, "لا كلمة هنا", Toast.LENGTH_SHORT).show() }
             return
         }
         lookupAndShow(word)
@@ -86,7 +86,7 @@ class DictController(private val host: Host) {
         }
         val word = sel.text.split(Regex("\\s+")).firstOrNull().orEmpty()
         if (word.isBlank()) {
-            runOnUiThread { Toast.makeText(activity, "No text selected", Toast.LENGTH_SHORT).show() }
+            runOnUiThread { Toast.makeText(activity, "لم يُحدَّد نص", Toast.LENGTH_SHORT).show() }
             return
         }
         lookupAndShow(word)
@@ -103,7 +103,7 @@ class DictController(private val host: Host) {
         val word = rawWord.trim().trim { !it.isLetter() && it != '\'' && it != '-' }
         if (word.isEmpty()) return
         if (!ensureDictOpen()) {
-            runOnUiThread { Toast.makeText(activity, "Dictionary not available", Toast.LENGTH_SHORT).show() }
+            runOnUiThread { Toast.makeText(activity, "القاموس غير متاح", Toast.LENGTH_SHORT).show() }
             return
         }
         var def = try {
@@ -183,7 +183,7 @@ class DictController(private val host: Host) {
         if (dictHandle != 0L) return true
         val dest = File(activity.filesDir, "dict.db")
         if (!dest.exists() || dest.length() == 0L) {
-            runOnUiThread { Toast.makeText(activity, "Preparing dictionary…", Toast.LENGTH_SHORT).show() }
+            runOnUiThread { Toast.makeText(activity, "جارٍ تجهيز القاموس…", Toast.LENGTH_SHORT).show() }
             try {
                 activity.assets.open("dict.db").use { input -> dest.outputStream().use { input.copyTo(it) } }
             } catch (e: Exception) {
@@ -313,7 +313,7 @@ class DictController(private val host: Host) {
             body.removeAllViews()
             if (thesaurus.isEmpty()) {
                 body.addView(TextView(activity).apply {
-                    text = "No thesaurus entries for this word."
+                    text = "لا مرادفات لهذه الكلمة."
                     setTextColor(grey); textSize = Ink.sp(15f); setPadding(0, dp(4), 0, 0)
                 })
                 return
@@ -327,12 +327,12 @@ class DictController(private val host: Host) {
         }
         val tabs = LinearLayout(activity).apply { orientation = LinearLayout.HORIZONTAL; setPadding(0, dp(10), 0, 0) }
         tabDef = TextView(activity).apply {
-            text = "DEFINITION"; textSize = Ink.sp(12f); letterSpacing = 0.1f
+            text = "التعريف"; textSize = Ink.sp(12f); letterSpacing = 0.1f
             setPadding(0, dp(4), dp(24), dp(4)); isClickable = true
             setOnClickListener { styleTab(tabDef, true); styleTab(tabThe, false); renderDefinition() }
         }
         tabThe = TextView(activity).apply {
-            text = "THESAURUS"; textSize = Ink.sp(12f); letterSpacing = 0.1f
+            text = "المرادفات"; textSize = Ink.sp(12f); letterSpacing = 0.1f
             setPadding(0, dp(4), 0, dp(4)); isClickable = true
             setOnClickListener { styleTab(tabThe, true); styleTab(tabDef, false); renderThesaurus() }
         }
@@ -414,13 +414,13 @@ class DictController(private val host: Host) {
             AlertDialog.Builder(activity, R.style.InkDialog)
                 .setTitle("Allow file access for dictionaries")
                 .setMessage("To find dictionaries you've copied to the device, inkread needs \"All files access\". Grant it on the next screen, then open Dicts again.")
-                .setPositiveButton("Open settings") { _, _ ->
+                .setPositiveButton("فتح الإعدادات") { _, _ ->
                     val uri = Uri.parse("package:${activity.packageName}")
                     runCatching {
                         activity.startActivity(Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, uri))
                     }.onFailure { activity.startActivity(Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)) }
                 }
-                .setNegativeButton("Cancel", null)
+                .setNegativeButton("إلغاء", null)
                 .show()
             return
         }
@@ -430,9 +430,9 @@ class DictController(private val host: Host) {
         val list = LinearLayout(activity).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(20), dp(8), dp(20), dp(8)) }
 
         val dialog = AlertDialog.Builder(activity, R.style.InkDialog)
-            .setTitle("Dictionaries")
+            .setTitle("القواميس")
             .setView(ScrollView(activity).apply { addView(list) })
-            .setPositiveButton("Done", null)
+            .setPositiveButton("تم", null)
             .create()
 
         fun refresh() {
@@ -457,12 +457,12 @@ class DictController(private val host: Host) {
                         text = b.name; setTextColor(Color.BLACK); textSize = Ink.sp(16f)
                     })
                     addView(TextView(activity).apply {
-                        text = if (b.installed) "Installed" else "Not installed"
+                        text = if (b.installed) "مثبّت" else "غير مثبّت"
                         setTextColor(Color.parseColor("#9E9E9E")); textSize = Ink.sp(12f)
                     })
                 })
                 row.addView(TextView(activity).apply {
-                    text = if (b.installed) "Remove" else "Install"
+                    text = if (b.installed) "حذف" else "تثبيت"
                     setTextColor(Color.BLACK); textSize = Ink.sp(14f); typeface = Typeface.DEFAULT_BOLD
                     setPadding(dp(14), dp(6), dp(14), dp(6))
                     background = GradientDrawable().apply {

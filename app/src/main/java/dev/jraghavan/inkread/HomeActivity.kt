@@ -28,6 +28,8 @@ import android.widget.TextView
  * decorative streak/stats/author/page-count chrome is omitted rather than faked.
  */
 class HomeActivity : Activity() {
+    override fun attachBaseContext(newBase: android.content.Context) = super.attachBaseContext(ArabicUi.wrap(newBase))
+
 
     private val density get() = resources.displayMetrics.density
     private fun dp(v: Int) = (v * density).toInt()
@@ -120,7 +122,7 @@ class HomeActivity : Activity() {
         column.addView(spacerWeighted(1f))
         if (recents.isEmpty()) {
             column.addView(TextView(this).apply {
-                text = "Open a document to start your library."
+                text = "افتح مستندًا لتبدأ مكتبتك."
                 setTextColor(textMuted); textSize = fs(16f); gravity = Gravity.CENTER
                 typeface = serif
             })
@@ -139,7 +141,7 @@ class HomeActivity : Activity() {
         }
         if (recents.size >= 2) {
             column.addView(spacer(dim(28)))
-            column.addView(eyebrowItalic("Recently on your shelf"))
+            column.addView(eyebrowItalic("أُضيف مؤخرًا إلى رفّك"))
             column.addView(spacer(dim(16)))
             column.addView(shelf(recents.take(3), contentW))
         }
@@ -215,7 +217,7 @@ class HomeActivity : Activity() {
             addView(LinearLayout(this@HomeActivity).apply {
                 orientation = LinearLayout.VERTICAL
                 addView(TextView(this@HomeActivity).apply {
-                    text = "Continue where you left off"; setTextColor(inkSoft); textSize = fs(15f)
+                    text = "تابع من حيث توقفت"; setTextColor(inkSoft); textSize = fs(15f)
                     typeface = Typeface.create(serif, Typeface.ITALIC)
                 })
                 addView(TextView(this@HomeActivity).apply {
@@ -242,7 +244,7 @@ class HomeActivity : Activity() {
                     addView(eyebrow(progressLabel))
                     addView(spacerWeighted(1f))
                     addView(TextView(this@HomeActivity).apply {
-                        text = "Resume →"; setTextColor(ink); textSize = fs(15f); typeface = serif
+                        text = "← متابعة"; setTextColor(ink); textSize = fs(15f); typeface = serif
                         paintFlags = paintFlags or android.graphics.Paint.UNDERLINE_TEXT_FLAG
                     })
                 })
@@ -291,13 +293,13 @@ class HomeActivity : Activity() {
             addView(LinearLayout(this@HomeActivity).apply {
                 orientation = LinearLayout.VERTICAL
                 setPadding(dim(16), pad, dim(12), pad)
-                addView(eyebrow("Today's Daily"))
+                addView(eyebrow("صحيفة اليوم"))
                 addView(TextView(this@HomeActivity).apply {
-                    text = "Your daily reading"; setTextColor(ink); textSize = fs(19f); typeface = serif
+                    text = "قراءتك اليومية"; setTextColor(ink); textSize = fs(19f); typeface = serif
                     setPadding(0, dim(4), 0, 0); maxLines = 2; setLineSpacing(0f, 1.1f)
                 })
                 addView(TextView(this@HomeActivity).apply {
-                    text = "Feeds compiled into one calm issue, on device"
+                    text = "مصادرك في عدد هادئ واحد على جهازك"
                     setTextColor(inkSoft); textSize = fs(13f); typeface = Typeface.create(serif, Typeface.ITALIC)
                     setPadding(0, dim(3), 0, 0)
                 })
@@ -305,7 +307,7 @@ class HomeActivity : Activity() {
 
             // Right action (WRAP height, centred — not full-height, which made it a black bar).
             addView(TextView(this@HomeActivity).apply {
-                text = "Open →"; setTextColor(Color.WHITE); textSize = fs(14f)
+                text = "← فتح"; setTextColor(Color.WHITE); textSize = fs(14f)
                 typeface = Typeface.create(serif, Typeface.BOLD); gravity = Gravity.CENTER
                 setPadding(dim(18), dim(10), dim(18), dim(10))
                 background = GradientDrawable().apply { setColor(ink); cornerRadius = dim(6).toFloat() }
@@ -330,9 +332,9 @@ class HomeActivity : Activity() {
             addView(LinearLayout(this@HomeActivity).apply {
                 orientation = LinearLayout.VERTICAL
                 setPadding(dim(16), pad, dim(12), pad)
-                addView(eyebrow("Your library"))
+                addView(eyebrow("مكتبتك"))
                 addView(TextView(this@HomeActivity).apply {
-                    text = "Browse and download"
+                    text = "تصفّح وتنزيل"
                     setTextColor(ink); textSize = fs(19f); typeface = serif
                     setPadding(0, dim(4), 0, 0); maxLines = 1
                 })
@@ -344,7 +346,7 @@ class HomeActivity : Activity() {
             }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
 
             addView(TextView(this@HomeActivity).apply {
-                text = "Open →"; setTextColor(Color.WHITE); textSize = fs(14f)
+                text = "← فتح"; setTextColor(Color.WHITE); textSize = fs(14f)
                 typeface = Typeface.create(serif, Typeface.BOLD); gravity = Gravity.CENTER
                 setPadding(dim(18), dim(10), dim(18), dim(10))
                 background = GradientDrawable().apply { setColor(ink); cornerRadius = dim(6).toFloat() }
@@ -405,7 +407,7 @@ class HomeActivity : Activity() {
         orientation = LinearLayout.VERTICAL
         gravity = Gravity.CENTER_HORIZONTAL
         addView(TextView(this@HomeActivity).apply {
-            text = swashCaps("Super Reader for a Super You")
+            text = swashCaps("قارئ خارق لشخص خارق")
             // Subtle footer: small (matches the version eyebrow's 12sp) and light (muted grey, not
             // the heavy dark script it was) so it reads as a quiet tagline, not a headline.
             setTextColor(textMuted); textSize = fs(12f); typeface = script
@@ -497,9 +499,9 @@ class HomeActivity : Activity() {
             val streak = ReadingStats.streakDays(this@HomeActivity)
             val minutes = ReadingStats.weekMinutes(this@HomeActivity)
             val pages = ReadingStats.weekPages(this@HomeActivity)
-            if (streak > 0) add(if (streak == 1) "1-day streak" else "$streak-day streak")
+            if (streak > 0) add(if (streak == 1) "قراءة يوم متواصل" else "$streak-day streak")
             if (minutes > 0) add("${ReadingStats.formatMinutes(minutes)} this week")
-            if (pages > 0) add(if (pages == 1) "1 page" else "$pages pages")
+            if (pages > 0) add(if (pages == 1) "صفحة واحدة" else "$pages pages")
         }
         if (chips.isEmpty()) return null
         return TextView(this).apply {
@@ -511,7 +513,7 @@ class HomeActivity : Activity() {
     }
 
     private fun openButton(): View = TextView(this).apply {
-        text = "＋  Open a Document"; setTextColor(ink); textSize = fs(16f); typeface = serif
+        text = "＋  فتح مستند"; setTextColor(ink); textSize = fs(16f); typeface = serif
         gravity = Gravity.CENTER
         setPadding(dim(30), dim(13), dim(30), dim(13))
         background = GradientDrawable().apply {

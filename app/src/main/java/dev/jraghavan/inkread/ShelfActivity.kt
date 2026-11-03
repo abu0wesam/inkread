@@ -27,6 +27,8 @@ import java.io.File
  * are decoded, since a list on a panel that repaints in whole frames wants text.
  */
 class ShelfActivity : Activity() {
+    override fun attachBaseContext(newBase: android.content.Context) = super.attachBaseContext(ArabicUi.wrap(newBase))
+
 
     private val density get() = resources.displayMetrics.density
     private fun dp(v: Int) = (v * density).toInt()
@@ -63,7 +65,7 @@ class ShelfActivity : Activity() {
 
         if (books.isEmpty()) {
             column.addView(TextView(this).apply {
-                text = "No books on the device yet."
+                text = "لا كتب على الجهاز بعد."
                 setTextColor(Ink.inkSoft); textSize = Ink.sp(15f); typeface = serif
                 setPadding(0, dp(18), 0, 0)
             })
@@ -75,9 +77,9 @@ class ShelfActivity : Activity() {
     private fun header(books: List<File>): View = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL
         addView(backLink())
-        addView(Ink.eyebrow(this@ShelfActivity, "Your shelf"))
+        addView(Ink.eyebrow(this@ShelfActivity, "رفّك"))
         addView(TextView(this@ShelfActivity).apply {
-            text = if (books.size == 1) "1 book" else "${books.size} books"
+            text = if (books.size == 1) "كتاب واحد" else "${books.size} books"
             setTextColor(ink); textSize = Ink.sp(28f); typeface = serif
             setPadding(0, dp(4), 0, dp(2))
         })
@@ -135,7 +137,7 @@ class ShelfActivity : Activity() {
         gravity = Gravity.CENTER_VERTICAL
         setPadding(0, dp(10), 0, dp(2))
         addView(TextView(this@ShelfActivity).apply {
-            text = "SORT"
+            text = "الترتيب"
             setTextColor(Ink.muted); textSize = Ink.sp(10f); typeface = mono; letterSpacing = 0.14f
             setPadding(0, 0, dp(14), 0)
         })
@@ -170,14 +172,14 @@ class ShelfActivity : Activity() {
      * than showing a bare arrow, and the padding is a finger's worth: this is the only exit.
      */
     private fun backLink(): View = TextView(this).apply {
-        text = "‹ Home"
+        text = "الرئيسية ›"
         setTextColor(Ink.muted)
         textSize = Ink.sp(12f)
         typeface = mono
         letterSpacing = 0.12f
         setPadding(0, dp(6), dp(24), dp(16))
         isClickable = true
-        contentDescription = "Back to Home"
+        contentDescription = "العودة للرئيسية"
         setOnClickListener { finish() }
     }
 
@@ -218,7 +220,7 @@ class ShelfActivity : Activity() {
             }
         }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
 
-        addView(Ink.pillButton(this@ShelfActivity, "Remove", primary = false) { confirmRemove(book) })
+        addView(Ink.pillButton(this@ShelfActivity, "حذف", primary = false) { confirmRemove(book) })
     }
 
     /** The name this book is listed under: its metadata title, else the file name. */
@@ -230,7 +232,7 @@ class ShelfActivity : Activity() {
         val bits = mutableListOf(book.extension.uppercase(), Books.humanSize(Books.sizeOnDisk(book)))
         val percent = Books.progress(this, book.name)
         if (percent > 0) bits += "$percent% read"
-        if (Books.hasNotes(book)) bits += "HAS NOTES"
+        if (Books.hasNotes(book)) bits += "فيه ملاحظات"
         return bits.joinToString(" · ")
     }
 
@@ -256,21 +258,21 @@ class ShelfActivity : Activity() {
         }
         Log.i(TAG, "remove dialog: ${book.name} hasNotes=$hasNotes (offers 'Remove with notes'=$hasNotes)")
         val dialog = AlertDialog.Builder(this, R.style.InkDialog)
-            .setTitle("Remove from inkread")
+            .setTitle("حذف من inkread")
             .setMessage(message)
-            .setPositiveButton("Remove") { _, _ -> doRemove(book, alsoNotes = false) }
-            .setNegativeButton("Cancel", null)
-        if (hasNotes) dialog.setNeutralButton("Remove with notes") { _, _ -> confirmNotesToo(book, title) }
+            .setPositiveButton("حذف") { _, _ -> doRemove(book, alsoNotes = false) }
+            .setNegativeButton("إلغاء", null)
+        if (hasNotes) dialog.setNeutralButton("حذف مع الملاحظات") { _, _ -> confirmNotesToo(book, title) }
         dialog.show()
     }
 
     /** Discarding handwriting is irreversible, so it gets its own confirmation. */
     private fun confirmNotesToo(book: File, title: String) {
         AlertDialog.Builder(this, R.style.InkDialog)
-            .setTitle("Delete the notes too?")
+            .setTitle("حذف الملاحظات أيضًا؟")
             .setMessage("Your handwriting on “$title” will be deleted. This can't be undone.")
-            .setPositiveButton("Delete notes") { _, _ -> doRemove(book, alsoNotes = true) }
-            .setNegativeButton("Keep notes") { _, _ -> doRemove(book, alsoNotes = false) }
+            .setPositiveButton("حذف الملاحظات") { _, _ -> doRemove(book, alsoNotes = true) }
+            .setNegativeButton("إبقاء الملاحظات") { _, _ -> doRemove(book, alsoNotes = false) }
             .show()
     }
 
@@ -279,7 +281,7 @@ class ShelfActivity : Activity() {
         if (Books.remove(this, book, alsoNotes)) {
             Toast.makeText(this, "Removed · ${Books.humanSize(freed)} free", Toast.LENGTH_SHORT).show()
         } else {
-            Toast.makeText(this, "Could not remove that book", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "تعذّر حذف الكتاب", Toast.LENGTH_SHORT).show()
         }
         render()
     }

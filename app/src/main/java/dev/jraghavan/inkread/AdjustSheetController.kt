@@ -97,13 +97,13 @@ class AdjustSheetController(private val host: Host) {
         val content = android.widget.FrameLayout(activity)
 
         val panels: List<Triple<String, Int, () -> View>> = listOf(
-            Triple("Style", R.drawable.ic_menu_adjust) { stylePanel() },
-            Triple("Rotate", R.drawable.ic_menu_rotate) { rotationPanel() },
-            Triple("Crop", R.drawable.ic_menu_crop) { cropPanel() },
-            Triple("Zoom", R.drawable.ic_menu_fit) { zoomPanel() },
-            Triple("Page", R.drawable.ic_menu_page) { pagePanel() },
-            Triple("Font", R.drawable.ic_menu_font) { fontPanel() },
-            Triple("Display", R.drawable.ic_menu_display) { displayPanel() },
+            Triple("النمط", R.drawable.ic_menu_adjust) { stylePanel() },
+            Triple("تدوير", R.drawable.ic_menu_rotate) { rotationPanel() },
+            Triple("اقتصاص", R.drawable.ic_menu_crop) { cropPanel() },
+            Triple("تكبير", R.drawable.ic_menu_fit) { zoomPanel() },
+            Triple("الصفحة", R.drawable.ic_menu_page) { pagePanel() },
+            Triple("الخط", R.drawable.ic_menu_font) { fontPanel() },
+            Triple("العرض", R.drawable.ic_menu_display) { displayPanel() },
         )
         val cells = ArrayList<LinearLayout>()
         fun select(i: Int) {
@@ -267,10 +267,10 @@ class AdjustSheetController(private val host: Host) {
     private fun fontLibraryControls(): View {
         return LinearLayout(activity).apply {
             orientation = LinearLayout.HORIZONTAL
-            addView(pill("Add…") { host.openFontPicker() })
+            addView(pill("إضافة…") { host.openFontPicker() })
             if (UserFonts.files(activity).isNotEmpty()) {
                 addView(
-                    pill("Remove…") { showRemoveFontDialog() },
+                    pill("حذف…") { showRemoveFontDialog() },
                     LinearLayout.LayoutParams(
                         ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT,
                     ).apply { leftMargin = Ink.sdp(8) },
@@ -286,7 +286,7 @@ class AdjustSheetController(private val host: Host) {
         if (fonts.isEmpty()) return
         val names = fonts.map(UserFonts::displayName).toTypedArray()
         AlertDialog.Builder(activity)
-            .setTitle("Remove a font")
+            .setTitle("حذف خط")
             .setItems(names) { _, which ->
                 val font = fonts[which]
                 UserFonts.remove(activity, font)
@@ -303,7 +303,7 @@ class AdjustSheetController(private val host: Host) {
                 }
                 Toast.makeText(activity, "Removed ${UserFonts.displayName(font)}", Toast.LENGTH_SHORT).show()
             }
-            .setNegativeButton("Cancel", null)
+            .setNegativeButton("إلغاء", null)
             .show()
     }
 
@@ -339,7 +339,7 @@ class AdjustSheetController(private val host: Host) {
             ActivityInfo.SCREEN_ORIENTATION_REVERSE_LANDSCAPE,
         )
         val sel = orients.indexOf(prefs.orientation).coerceAtLeast(0)
-        return settingRow("Rotation", segmented(listOf("0°", "90°", "180°", "270°"), sel) { which ->
+        return settingRow("التدوير", segmented(listOf("0°", "90°", "180°", "270°"), sel) { which ->
             host.diag { "DIAG rotation -> $which" }
             applyOrientation(orients[which])
         })
@@ -353,7 +353,7 @@ class AdjustSheetController(private val host: Host) {
 
     private fun fitPanel(): View {
         val sel = prefs.fit.coerceIn(0, 2) // index = core FitMode code
-        return settingRow("Fit", segmented(listOf("Full", "Width", "Height"), sel) { which ->
+        return settingRow("الملاءمة", segmented(listOf("كاملة", "العرض", "الارتفاع"), sel) { which ->
             prefs.fit = which
             host.diag { "DIAG fit -> mode=$which" }
             host.engineExecute {
@@ -366,7 +366,7 @@ class AdjustSheetController(private val host: Host) {
     /** The "Crop" tab: Page Crop (None/Auto) + a Margin cell bar (margin kept around the content). */
     private fun cropPanel(): View {
         val container = LinearLayout(activity).apply { orientation = LinearLayout.VERTICAL }
-        container.addView(settingRow("Page Crop", segmented(listOf("None", "Auto"), if (prefs.cropAuto) 1 else 0) { which ->
+        container.addView(settingRow("اقتصاص الصفحة", segmented(listOf("بدون", "تلقائي"), if (prefs.cropAuto) 1 else 0) { which ->
             prefs.cropAuto = which == 1
             host.diag { "DIAG crop auto=${which == 1}" }
             host.engineExecute {
@@ -374,7 +374,7 @@ class AdjustSheetController(private val host: Host) {
                 host.repaintPanel()
             }
         }))
-        container.addView(settingRow("Margin", cellBar(8, prefs.cropMargin) { level ->
+        container.addView(settingRow("الهامش", cellBar(8, prefs.cropMargin) { level ->
             prefs.cropMargin = level
             host.diag { "DIAG crop margin=$level" }
             host.engineExecute {
@@ -388,30 +388,30 @@ class AdjustSheetController(private val host: Host) {
     /** The "Page" tab: reflow Margin + Line Spacing + Alignment (EPUB; a toast on fixed-layout PDF). */
     private fun pagePanel(): View {
         fun applyReflow(call: () -> Int) =
-            runReflow(call, whenFixedLayout = "Page layout adjusts reflowable books (EPUB)")
+            runReflow(call, whenFixedLayout = "تخطيط الصفحة يخص كتب EPUB القابلة لإعادة التدفق")
         val container = LinearLayout(activity).apply { orientation = LinearLayout.VERTICAL }
         // Reflow toggle — only for a text-layer PDF (EPUB is always reflowable; a scanned PDF can't).
         // It gates whether the Line Spacing / Alignment / Font Size controls take effect on a PDF.
         val supportsReflow = try { NativeBridge.nativeSupportsReflow(host.docHandle) } catch (e: RuntimeException) { false }
         if (supportsReflow) {
-            container.addView(settingRow("Reflow", segmented(listOf("Off", "On"), if (host.reflowOn) 1 else 0) { which ->
+            container.addView(settingRow("إعادة التدفق", segmented(listOf("إيقاف", "On"), if (host.reflowOn) 1 else 0) { which ->
                 host.diag { "DIAG reflow=${which == 1}" }
                 host.setReflowMode(which == 1)
             }))
         }
         // #167. The default margin was reported as too wide, and the bezel already eats usable
         // width, so the range runs down to none rather than only trimming the default a little.
-        container.addView(settingRow("Margin", segmented(DisplayPrefs.MARGIN_LABELS, prefs.marginIndex()) { which ->
+        container.addView(settingRow("الهامش", segmented(DisplayPrefs.MARGIN_LABELS, prefs.marginIndex()) { which ->
             prefs.marginPct = DisplayPrefs.MARGINS[which]
             host.diag { "DIAG margin=${DisplayPrefs.MARGINS[which]}%" }
             applyReflow { NativeBridge.nativeSetMargin(host.docHandle, DisplayPrefs.MARGINS[which]) }
         }))
-        container.addView(settingRow("Line Spacing", segmented(DisplayPrefs.LINE_SPACING_LABELS, prefs.lineSpacingIndex()) { which ->
+        container.addView(settingRow("تباعد الأسطر", segmented(DisplayPrefs.LINE_SPACING_LABELS, prefs.lineSpacingIndex()) { which ->
             prefs.lineSpacingMult = DisplayPrefs.LINE_SPACINGS[which]
             host.diag { "DIAG line spacing=${DisplayPrefs.LINE_SPACINGS[which]}" }
             applyReflow { NativeBridge.nativeSetLineSpacing(host.docHandle, DisplayPrefs.LINE_SPACINGS[which]) }
         }))
-        container.addView(settingRow("Alignment", segmented(listOf("Left", "Justify", "Center", "Right"), prefs.alignment) { which ->
+        container.addView(settingRow("المحاذاة", segmented(listOf("يسار", "ضبط", "وسط", "يمين"), prefs.alignment) { which ->
             prefs.alignment = which
             host.diag { "DIAG alignment=$which" }
             applyReflow { NativeBridge.nativeSetAlignment(host.docHandle, which) }
@@ -419,7 +419,7 @@ class AdjustSheetController(private val host: Host) {
         // #194. The core declines two columns on a page too narrow for a readable measure. Say so:
         // silently doing nothing is indistinguishable from a broken control, and the setting is
         // still stored — it takes effect once the text is smaller or the page wider.
-        container.addView(settingRow("Columns", segmented(listOf("Single", "Two"), prefs.columns - 1) { which ->
+        container.addView(settingRow("الأعمدة", segmented(listOf("عمود", "عمودان"), prefs.columns - 1) { which ->
             prefs.columns = which + 1
             applyReflow {
                 val page = NativeBridge.nativeSetColumns(host.docHandle, prefs.columns)
@@ -432,7 +432,7 @@ class AdjustSheetController(private val host: Host) {
                 if (prefs.columns > effective) activity.runOnUiThread {
                     Toast.makeText(
                         activity,
-                        "Two columns need a wider page or smaller text",
+                        "العمودان يحتاجان صفحة أعرض أو نصًا أصغر",
                         Toast.LENGTH_SHORT,
                     ).show()
                 }
@@ -473,13 +473,13 @@ class AdjustSheetController(private val host: Host) {
         return LinearLayout(activity).apply {
             orientation = LinearLayout.VERTICAL
             addView(fitPanel())
-            addView(settingRow("Zoom", zoomControl))
+            addView(settingRow("تكبير", zoomControl))
         }
     }
 
     private fun displayPanel(): View {
         val container = LinearLayout(activity).apply { orientation = LinearLayout.VERTICAL }
-        container.addView(settingRow("Contrast", cellBar(DisplayPrefs.CONTRAST_MAX, prefs.contrast) { level ->
+        container.addView(settingRow("التباين", cellBar(DisplayPrefs.CONTRAST_MAX, prefs.contrast) { level ->
             prefs.contrast = level
             host.diag { "DIAG contrast step=$level" }
             host.engineExecute {
@@ -487,7 +487,7 @@ class AdjustSheetController(private val host: Host) {
                 host.repaintPanel()
             }
         }))
-        container.addView(settingRow("Quality", segmented(listOf("Low", "Default", "High"), prefs.renderQuality) { which ->
+        container.addView(settingRow("الجودة", segmented(listOf("منخفضة", "افتراضية", "عالية"), prefs.renderQuality) { which ->
             prefs.renderQuality = which
             host.diag { "DIAG render quality=$which" }
             host.engineExecute {
@@ -496,7 +496,7 @@ class AdjustSheetController(private val host: Host) {
             }
         }))
         container.addView(menuSizeRow())
-        container.addView(settingRow("Full Refresh", segmented(DisplayPrefs.REFRESH_INTERVAL_LABELS, DisplayPrefs.REFRESH_INTERVALS.indexOf(prefs.fullRefreshEvery).coerceAtLeast(0)) { which ->
+        container.addView(settingRow("تحديث كامل", segmented(DisplayPrefs.REFRESH_INTERVAL_LABELS, DisplayPrefs.REFRESH_INTERVALS.indexOf(prefs.fullRefreshEvery).coerceAtLeast(0)) { which ->
             val n = DisplayPrefs.REFRESH_INTERVALS[which]
             prefs.fullRefreshEvery = n
             host.applyFullRefreshInterval(n)
@@ -544,7 +544,7 @@ class AdjustSheetController(private val host: Host) {
             addView(presets.view)
             addView(seek, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         }
-        return settingRow("Menu Size", control, hint = readout)
+        return settingRow("حجم القوائم", control, hint = readout)
     }
 
     /** Persist + apply the menu/chrome scale (#133) for large panels (e.g. the Manta).
@@ -567,10 +567,10 @@ class AdjustSheetController(private val host: Host) {
     private data class StyleSpec(val scale: Float, val spacing: Float, val contrast: Int, val night: Boolean)
 
     private fun styleSpec(name: String): StyleSpec = when (name) {
-        "Bold" -> StyleSpec(1.0f, DisplayPrefs.DEFAULT_LINE_SPACING, 4, false) // darker text (heavier ink)
-        "Night" -> StyleSpec(1.0f, DisplayPrefs.DEFAULT_LINE_SPACING, 0, true) // inverted (light on dark)
-        "Outdoor" -> StyleSpec(1.0f, DisplayPrefs.DEFAULT_LINE_SPACING, DisplayPrefs.CONTRAST_MAX, false) // maximum contrast
-        "Relaxed" -> StyleSpec(1.15f, 1.7f, 0, false) // larger + airier
+        "عريض" -> StyleSpec(1.0f, DisplayPrefs.DEFAULT_LINE_SPACING, 4, false) // darker text (heavier ink)
+        "ليلي" -> StyleSpec(1.0f, DisplayPrefs.DEFAULT_LINE_SPACING, 0, true) // inverted (light on dark)
+        "خارجي" -> StyleSpec(1.0f, DisplayPrefs.DEFAULT_LINE_SPACING, DisplayPrefs.CONTRAST_MAX, false) // maximum contrast
+        "مريح" -> StyleSpec(1.15f, 1.7f, 0, false) // larger + airier
         else -> StyleSpec(1.0f, DisplayPrefs.DEFAULT_LINE_SPACING, 0, false) // Original — defaults
     }
 
@@ -579,7 +579,7 @@ class AdjustSheetController(private val host: Host) {
         val container = LinearLayout(activity).apply { orientation = LinearLayout.VERTICAL }
         container.addView(
             settingRow(
-                "Preset",
+                "نمط جاهز",
                 segmented(DisplayPrefs.STYLE_PRESETS, DisplayPrefs.STYLE_PRESETS.indexOf(prefs.stylePreset).coerceAtLeast(0)) { which ->
                     applyStylePreset(DisplayPrefs.STYLE_PRESETS[which])
                 },
@@ -636,19 +636,19 @@ class AdjustSheetController(private val host: Host) {
         // Typeface picker — the bundled reading faces (EPUB/reflow; a toast on fixed-layout PDF).
         val faces = UserFonts.faceNames()
         if (faces.isNotEmpty()) {
-            container.addView(settingRow("Typeface", scrollable(segmented(faces, prefs.fontId(faces)) { which ->
+            container.addView(settingRow("نوع الخط", scrollable(segmented(faces, prefs.fontId(faces)) { which ->
                 prefs.setFontId(faces, which)
                 host.engineExecute {
                     val np = try { NativeBridge.nativeSetFont(host.docHandle, which) } catch (e: RuntimeException) { -1 }
                     if (np >= 0) { host.refreshPageCount(); host.repaintPanel() }
                     else activity.runOnUiThread {
-                        Toast.makeText(activity, "Typeface adjusts reflowable books (EPUB)", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(activity, "نوع الخط يخص كتب EPUB القابلة لإعادة التدفق", Toast.LENGTH_SHORT).show()
                     }
                 }
             })))
-            container.addView(settingRow("Your fonts", fontLibraryControls()))
+            container.addView(settingRow("خطوطك", fontLibraryControls()))
         }
-        container.addView(settingRow("Font Size", control))
+        container.addView(settingRow("حجم الخط", control))
         return container
     }
 
@@ -664,7 +664,7 @@ class AdjustSheetController(private val host: Host) {
         }
         runReflow(
             { NativeBridge.nativeSetTextScale(host.docHandle, DisplayPrefs.TEXT_SCALES[idx]) },
-            whenFixedLayout = "Font size adjusts reflowable books (EPUB)".takeIf { warnIfFixed },
+            whenFixedLayout = "حجم الخط يخص كتب EPUB القابلة لإعادة التدفق".takeIf { warnIfFixed },
         )
     }
 

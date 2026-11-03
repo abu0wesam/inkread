@@ -152,7 +152,7 @@ class LassoController(private val host: Host) {
     /** Toggle Smart ↔ Freehand; returns the new mode's display name (for the toast). */
     fun cycleLassoMode(): String {
         lassoMode = if (lassoMode == 0) 1 else 0
-        return if (lassoMode == 0) "Smart lasso" else "Freehand lasso"
+        return if (lassoMode == 0) "تحديد ذكي" else "تحديد حر"
     }
 
     /** Drop any lasso selection when the page changes — the ids belong to the old page (engine). */
@@ -274,7 +274,7 @@ class LassoController(private val host: Host) {
      */
     private fun selectTextInLoop(poly: FloatArray) {
         if (host.docHandle == 0L || poly.size < 6) {
-            runOnUiThread { Toast.makeText(activity, "Nothing under the loop", Toast.LENGTH_SHORT).show() }
+            runOnUiThread { Toast.makeText(activity, "لا شيء داخل الحلقة", Toast.LENGTH_SHORT).show() }
             return
         }
         val sx = poly[0]; val sy = poly[1]
@@ -294,15 +294,15 @@ class LassoController(private val host: Host) {
         val openDrag = kotlin.math.hypot(ex - sx, ey - sy) > OPEN_DRAG_FRAC
         val multiLine = (y1 - y0) > MULTILINE_DRAG_FRAC
         if (multiLine) {
-            if (openDrag) presentLineSpanSelection(sx, sy, ex, ey, "No text under the selection")
+            if (openDrag) presentLineSpanSelection(sx, sy, ex, ey, "لا نص تحت التحديد")
             // Closed loop: corner→corner. The last line is clipped to the loop's rightmost extent
             // (x1), an approximation — for an irregular loop that may run a word or two past where the
             // user closed it on the bottom line. Acceptable for circling a region; the directional
             // open-drag path above clips precisely to the actual lift point.
-            else presentLineSpanSelection(x0, y0, x1, y1, "No text under the selection")
+            else presentLineSpanSelection(x0, y0, x1, y1, "لا نص تحت التحديد")
         } else {
             // Single line → the dragged/circled span on that line (precise, horizontal).
-            presentTextSelection(x0, y0, x1, y1, "Nothing under the loop — circle ink or printed words")
+            presentTextSelection(x0, y0, x1, y1, "لا شيء داخل الحلقة — أحط الحبر أو الكلمات المطبوعة")
         }
     }
 
@@ -369,16 +369,16 @@ class LassoController(private val host: Host) {
         val snippet = sel.text.trim().replace(Regex("\\s+"), " ")
         // Define is a per-word action — it makes no sense for a multi-line selection, so a multi-line
         // catch (more than one line box) offers only Copy + Highlight.
-        val items = if (sel.boxes.size > 1) arrayOf("Copy", "Highlight", "Add to Digest")
-        else arrayOf("Define", "Copy", "Highlight", "Add to Digest")
+        val items = if (sel.boxes.size > 1) arrayOf("نسخ", "تظليل", "أضف للخلاصة")
+        else arrayOf("تعريف", "نسخ", "تظليل", "أضف للخلاصة")
         AlertDialog.Builder(activity, R.style.InkDialog)
             .setTitle(if (snippet.length > 42) snippet.take(42) + "…" else snippet)
             .setItems(items) { _, which ->
                 when (items[which]) {
-                    "Define" -> host.defineSelectionText(snippet)
-                    "Copy" -> copyTextToClipboard(snippet)
-                    "Highlight" -> host.engineExecute { highlightTextBoxes(sel) }
-                    "Add to Digest" -> host.addDigestText(host.currentPage, sel.text, sel.boundsNorm())
+                    "تعريف" -> host.defineSelectionText(snippet)
+                    "نسخ" -> copyTextToClipboard(snippet)
+                    "تظليل" -> host.engineExecute { highlightTextBoxes(sel) }
+                    "أضف للخلاصة" -> host.addDigestText(host.currentPage, sel.text, sel.boundsNorm())
                 }
             }
             // Any dismissal (action chosen or cancelled) clears the box overlay; a Highlight redraws
@@ -391,7 +391,7 @@ class LassoController(private val host: Host) {
     private fun copyTextToClipboard(text: String) {
         val cm = activity.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
         cm.setPrimaryClip(android.content.ClipData.newPlainText("inkread", text))
-        Toast.makeText(activity, "Copied", Toast.LENGTH_SHORT).show()
+        Toast.makeText(activity, "تم النسخ", Toast.LENGTH_SHORT).show()
     }
 
     /**
@@ -434,7 +434,7 @@ class LassoController(private val host: Host) {
             if (selectedIds.isEmpty()) {
                 host.dismissSelectionToolbar()
                 if (host.activeTool == Tool.LASSO) {
-                    Toast.makeText(activity, "Nothing selected — circle around your writing", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(activity, "لم يُحدَّد شيء — أحط كتابتك بحلقة", Toast.LENGTH_SHORT).show()
                 }
             } else {
                 showSelectionToolbar()
@@ -595,11 +595,11 @@ class LassoController(private val host: Host) {
                 // to the line before the lift, the lift line clipped to its word, gaps filled.
                 val sx = host.vToNx(pts[0]); val sy = host.vToNy(pts[1])
                 val ex = host.vToNx(pts[pts.size - 2]); val ey = host.vToNy(pts[pts.size - 1])
-                host.engineExecute { presentLineSpanSelection(sx, sy, ex, ey, "No text under the selection") }
+                host.engineExecute { presentLineSpanSelection(sx, sy, ex, ey, "لا نص تحت التحديد") }
             } else {
                 // Single-line drag: the dragged horizontal span on that one line.
                 val r = floatArrayOf(host.vToNx(minX), host.vToNy(minY), host.vToNx(maxX), host.vToNy(maxY))
-                host.engineExecute { presentTextSelection(r[0], r[1], r[2], r[3], "No text under the selection") }
+                host.engineExecute { presentTextSelection(r[0], r[1], r[2], r[3], "لا نص تحت التحديد") }
             }
         } else {
             // A single still tap is a word lookup (the dict card).

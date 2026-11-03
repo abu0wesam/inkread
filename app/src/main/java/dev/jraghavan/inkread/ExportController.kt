@@ -46,7 +46,7 @@ class ExportController(private val host: Host) {
     fun showExportDialog() {
         val path = host.currentDocPath
         if (path == null || host.docHandle == 0L) {
-            Toast.makeText(activity, "No open document to export", Toast.LENGTH_SHORT).show()
+            Toast.makeText(activity, "لا مستند مفتوح للتصدير", Toast.LENGTH_SHORT).show()
             return
         }
         // inkread reads a PRIVATE copy of the PDF; to make the export visible on the desktop it must
@@ -55,7 +55,7 @@ class ExportController(private val host: Host) {
             AlertDialog.Builder(activity, R.style.InkDialog)
                 .setTitle("Allow file access to export")
                 .setMessage("To save annotated PDFs into your synced $EXPORT_DIR_NAME folder (so they appear on your computer), inkread needs \"All files access\". Grant it on the next screen, then export again.")
-                .setPositiveButton("Open settings") { _, _ ->
+                .setPositiveButton("فتح الإعدادات") { _, _ ->
                     val uri = Uri.parse("package:${activity.packageName}")
                     runCatching {
                         activity.startActivity(Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, uri))
@@ -63,7 +63,7 @@ class ExportController(private val host: Host) {
                         activity.startActivity(Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION))
                     }
                 }
-                .setNegativeButton("Cancel", null)
+                .setNegativeButton("إلغاء", null)
                 .show()
             return
         }
@@ -77,10 +77,10 @@ class ExportController(private val host: Host) {
                 ),
             ) { _, which ->
                 val flatten = which == 1
-                Toast.makeText(activity, "Exporting…", Toast.LENGTH_SHORT).show()
+                Toast.makeText(activity, "جارٍ التصدير…", Toast.LENGTH_SHORT).show()
                 host.engineExecute { runExport(path, flatten) }
             }
-            .setNegativeButton("Cancel", null)
+            .setNegativeButton("إلغاء", null)
             .show()
     }
 
@@ -114,7 +114,7 @@ class ExportController(private val host: Host) {
             .removePrefix(Environment.getExternalStorageDirectory().absolutePath + "/")
         activity.runOnUiThread {
             val msg = when {
-                !ok -> "Export failed"
+                !ok -> "فشل التصدير"
                 overwrote -> "Replaced $rel — sync to see it"
                 else -> "Saved to $rel — sync to see it"
             }
@@ -143,6 +143,6 @@ class ExportController(private val host: Host) {
         const val EXPORT_DIR_NAME = "Document"
 
         /** Supernote-synced roots searched to place the export beside the original PDF. */
-        val SYNCED_DIRS = arrayOf("Document", "EXPORT", "Note", "INBOX", "MyStyle", "Download")
+        val SYNCED_DIRS = arrayOf("Document", "تصدير", "Note", "INBOX", "MyStyle", "Download")
     }
 }

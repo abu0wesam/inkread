@@ -49,6 +49,8 @@ import java.util.concurrent.Executors
  * touched solely on that thread; a re-entrant close is safe (Amendment 2).
  */
 class ReaderActivity : Activity(), SurfaceHolder.Callback {
+    override fun attachBaseContext(newBase: android.content.Context) = super.attachBaseContext(ArabicUi.wrap(newBase))
+
 
     private lateinit var surfaceView: SurfaceView
     // Chosen by capability probe, not hardcoded (#220): a device with no e-ink service is told it
@@ -664,7 +666,7 @@ class ReaderActivity : Activity(), SurfaceHolder.Callback {
         mainHandler.removeCallbacks(fingerLongPress) // drop any pending finger gesture on leaving
         mainHandler.removeCallbacks(pendingCentreMenu) // don't pop the bar on a paused/finishing activity (#54)
         autoTurn.stop() // #97: never let the hands-free timer fire against a backgrounded reader
-        dismissReflowProgress() // don't leak the "Reflowing…" dialog if backgrounded mid-reflow (#55)
+        dismissReflowProgress() // don't leak the "جارٍ إعادة التدفق…" dialog if backgrounded mid-reflow (#55)
         stylus.cancelPendingOnPause() // drop the pending pen-lookup + deferred flush (explicit save below)
         ink.teardown() // release the firmware ink claim + clear the overlay
         // Persist the reading position + flush ink when backgrounded (RR27/RR20) — engine thread.
@@ -720,7 +722,7 @@ class ReaderActivity : Activity(), SurfaceHolder.Callback {
         try {
             startActivityForResult(intent, REQ_OPEN_DOC)
         } catch (e: android.content.ActivityNotFoundException) {
-            Toast.makeText(this, "No file picker available", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "لا يتوفر منتقي ملفات", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -736,7 +738,7 @@ class ReaderActivity : Activity(), SurfaceHolder.Callback {
         try {
             startActivityForResult(intent, REQ_OPEN_FONT)
         } catch (e: android.content.ActivityNotFoundException) {
-            Toast.makeText(this, "No file picker available", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "لا يتوفر منتقي ملفات", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -748,7 +750,7 @@ class ReaderActivity : Activity(), SurfaceHolder.Callback {
         // saved choice is a name, which resolves the same before and after (#169).
         runOnUiThread {
             val message = if (stored == null) {
-                "That file isn't a font inkread can use"
+                "هذا الملف ليس خطًا يمكن استخدامه"
             } else {
                 "Added ${UserFonts.displayName(stored)} — pick it under Typeface"
             }
@@ -829,7 +831,13 @@ class ReaderActivity : Activity(), SurfaceHolder.Callback {
         if (docHandle != 0L) return
         val path = requestedPath
         val id = requestedId
+        val incoming = incomingUri()
         when {
+            // 0) "Open with…" / Share from another app (e.g. the Tools plugin).
+            incoming != null && path == null -> {
+                intent.data = null
+                importAndOpen(incoming)
+            }
             // 1) An explicit book chosen on Home / in the Library.
             path != null && id != null -> {
                 rememberBook(path, id)
@@ -852,6 +860,16 @@ class ReaderActivity : Activity(), SurfaceHolder.Callback {
                 }
             }
         }
+    }
+
+    /** The document another app handed us via ACTION_VIEW / ACTION_SEND, if any. */
+    private fun incomingUri(): Uri? = when (intent?.action) {
+        Intent.ACTION_VIEW -> intent.data
+        Intent.ACTION_SEND ->
+            if (android.os.Build.VERSION.SDK_INT >= 33)
+                intent.getParcelableExtra(Intent.EXTRA_STREAM, Uri::class.java)
+            else @Suppress("DEPRECATION") intent.getParcelableExtra(Intent.EXTRA_STREAM)
+        else -> null
     }
 
     /** Remember the current book so Home's "Continue" and a relaunch resume it (RR27). */
@@ -998,7 +1016,7 @@ class ReaderActivity : Activity(), SurfaceHolder.Callback {
         val dest = Books.importFrom(this, uri)
         if (dest == null) {
             Log.e(TAG, "import failed for $uri")
-            runOnUiThread { Toast.makeText(this, "Couldn't open that PDF", Toast.LENGTH_SHORT).show() }
+            runOnUiThread { Toast.makeText(this, "تعذّر فتح الملف", Toast.LENGTH_SHORT).show() }
             return
         }
         openSwap(dest.absolutePath, dest.name)
@@ -1107,7 +1125,7 @@ class ReaderActivity : Activity(), SurfaceHolder.Callback {
         blit { canvas ->
             canvas.drawColor(Color.WHITE)
             canvas.drawRect(0f, 0f, canvas.width.toFloat(), canvas.height.toFloat(), loadingBg)
-            canvas.drawText("Loading…", canvas.width / 2f, canvas.height / 2f, loadingText)
+            canvas.drawText("جارٍ التحميل…", canvas.width / 2f, canvas.height / 2f, loadingText)
         }
     }
 
@@ -1275,7 +1293,7 @@ class ReaderActivity : Activity(), SurfaceHolder.Callback {
         if (fingerIsPalm && !penActiveForPinch() && !gestureWasMultiTouch && zoom <= 1f) {
             val dx = e.x - fingerDownX
             val dy = e.y - fingerDownY
-            val dir = ReaderGestures.swipeDelta(dx, dy, surfaceView.width.toFloat(), strict = true)
+            val dir = ReaderGestures.swipeDelta(dx, dy, surfaceView.width.toFloat(), strict = true)?.let { flipDir(it) }
             if (dir != null) {
                 fingerIsPalm = false; minimap.invalidateThumb()
                 diag { "DIAG palm-swipe recovered dx=$dx dy=$dy" }
@@ -1328,7 +1346,7 @@ class ReaderActivity : Activity(), SurfaceHolder.Callback {
             // a more-vertical or short drag does nothing. Tap zones still work for precise turns.
             val dx = e.x - fingerDownX
             val dy = e.y - fingerDownY
-            val dir = ReaderGestures.swipeDelta(dx, dy, surfaceView.width.toFloat())
+            val dir = ReaderGestures.swipeDelta(dx, dy, surfaceView.width.toFloat())?.let { flipDir(it) }
             diag { "DIAG finger swipe dx=$dx dy=$dy dir=$dir" }
             if (dir != null) {
                 minimap.invalidateThumb()
@@ -1348,6 +1366,9 @@ class ReaderActivity : Activity(), SurfaceHolder.Callback {
      * right third = next, center = contents). The page fills the viewport (stretched render), so
      * the hit-test is the normalized tap `(x/w, y/h)` against the link rects.
      */
+    /** Arabic (right-to-left) page turning reverses every horizontal turn gesture. */
+    private fun flipDir(d: Int): Int = if (AppSettings.flipRtl(this)) -d else d
+
     private fun handleTap(x: Float, y: Float) {
         val w = surfaceView.width.toFloat()
         val h = surfaceView.height.toFloat()
@@ -1370,8 +1391,8 @@ class ReaderActivity : Activity(), SurfaceHolder.Callback {
         // isn't read as a double-tap-zoom) (#54).
         if (zone != ReaderGestures.Zone.CENTRE) lastCentreTapMs = 0L
         when (zone) {
-            ReaderGestures.Zone.PREV -> queuePageTurn(-1)
-            ReaderGestures.Zone.NEXT -> queuePageTurn(+1)
+            ReaderGestures.Zone.PREV -> queuePageTurn(flipDir(-1))
+            ReaderGestures.Zone.NEXT -> queuePageTurn(flipDir(+1))
             ReaderGestures.Zone.CENTRE -> {
                 // Centre: a double-tap zooms toward the point (#54); a single tap opens the menu,
                 // deferred [DOUBLE_TAP_MS] so the first tap of a double-tap doesn't flash the bar open.
@@ -1430,13 +1451,13 @@ class ReaderActivity : Activity(), SurfaceHolder.Callback {
         val parsed = runCatching { Uri.parse(uri) }.getOrNull()
         val scheme = parsed?.scheme?.lowercase()
         if (parsed == null || (scheme != "http" && scheme != "https")) {
-            Toast.makeText(this, "Unsupported link", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "رابط غير مدعوم", Toast.LENGTH_SHORT).show()
             return
         }
         try {
             startActivity(Intent(Intent.ACTION_VIEW, parsed))
         } catch (e: android.content.ActivityNotFoundException) {
-            Toast.makeText(this, "No app to open this link", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "لا تطبيق لفتح هذا الرابط", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -1506,7 +1527,7 @@ class ReaderActivity : Activity(), SurfaceHolder.Callback {
         // window that steals focus and drops the overlay — the ringed swatch is the feedback.
         if (chosen == Tool.HIGHLIGHTER && tool == Tool.HIGHLIGHTER) {
             if (toolOptions.isShowing()) collapseToolOptions()
-            else openToolOptions("Highlighter", HIGHLIGHT_COLORS, HIGHLIGHT_COLOR_NAMES, stylus.hlColorIndex) { stylus.hlColorIndex = it }
+            else openToolOptions("قلم التظليل", HIGHLIGHT_COLORS, HIGHLIGHT_COLOR_NAMES, stylus.hlColorIndex) { stylus.hlColorIndex = it }
             return true
         }
         if (chosen == Tool.PEN && tool == Tool.PEN) {
@@ -1562,7 +1583,7 @@ class ReaderActivity : Activity(), SurfaceHolder.Callback {
      */
     private fun openPenOptions() {
         toolOptions.show(
-            "Pen",
+            "القلم",
             PEN_COLORS,
             PEN_COLOR_NAMES,
             stylus.penColorIndex,
@@ -1842,7 +1863,7 @@ class ReaderActivity : Activity(), SurfaceHolder.Callback {
                 pageCount = NativeBridge.nativePageCount(docHandle)
                 repaintPanel()
             } else {
-                runOnUiThread { Toast.makeText(this, "This PDF has no text layer to reflow", Toast.LENGTH_SHORT).show() }
+                runOnUiThread { Toast.makeText(this, "لا طبقة نصية في هذا الـ PDF لإعادة تدفقه", Toast.LENGTH_SHORT).show() }
             }
             runOnUiThread { dismissReflowProgress() }
         }
@@ -1908,8 +1929,8 @@ class ReaderActivity : Activity(), SurfaceHolder.Callback {
          * Named because two things need it and they must not drift apart: the tap handler that
          * toggles the bookmark, and the tool palette, which has to keep out of it (#200).
          */
-        const val BOOKMARK_ZONE_W = 0.14f
-        const val BOOKMARK_ZONE_H = 0.08f
+        const val BOOKMARK_ZONE_W = 0.09f
+        const val BOOKMARK_ZONE_H = 0.05f
 
         const val KEY_PALETTE_EXPANDED = "palette_expanded" // tools out or put away (#200).
         const val KEY_PALETTE_X = "palette_x" // parked tool-palette corner, host fractions (#200).

@@ -21,11 +21,11 @@ enum class Tool(val label: String, val iconRes: Int, val hint: String?) {
     // No hint for Pen: the hint Toast is its own window, and when it closes the firmware drops the
     // live-ink overlay, taking everything written since the switch off the panel (#254). The ringed
     // Pen icon is the feedback. The other tools don't ride the firmware overlay.
-    PEN("Pen", R.drawable.ic_tool_pen, null),
-    HIGHLIGHTER("Highlight", R.drawable.ic_tool_highlighter, "Highlighter — drag over text; tap again to change shade"),
-    ERASER("Eraser", R.drawable.ic_tool_eraser, "Eraser — drag over ink to remove it, or flip the pen from any tool"),
-    LASSO("Lasso", R.drawable.ic_tool_lasso, "Lasso — circle strokes to select; tap Lasso again to switch Smart/Freehand"),
-    DEFINE("Define", R.drawable.ic_menu_dict, "Define — tap a word to look it up; drag over text to select it"),
+    PEN("القلم", R.drawable.ic_tool_pen, null),
+    HIGHLIGHTER("تظليل", R.drawable.ic_tool_highlighter, "Highlighter — drag over text; tap again to change shade"),
+    ERASER("الممحاة", R.drawable.ic_tool_eraser, "Eraser — drag over ink to remove it, or flip the pen from any tool"),
+    LASSO("الحلقة", R.drawable.ic_tool_lasso, "Lasso — circle strokes to select; tap Lasso again to switch Smart/Freehand"),
+    DEFINE("تعريف", R.drawable.ic_menu_dict, "Define — tap a word to look it up; drag over text to select it"),
     ;
 
     companion object {
@@ -269,8 +269,8 @@ class ToolPalette(
                 add(divider())
                 for (tool in Tool.values()) add(iconButton(tool))
                 add(divider())
-                add(actionButton(R.drawable.ic_sel_undo, "Undo", onUndo))
-                add(actionButton(R.drawable.ic_sel_redo, "Redo", onRedo))
+                add(actionButton(R.drawable.ic_sel_undo, "تراجع", onUndo))
+                add(actionButton(R.drawable.ic_sel_redo, "إعادة", onRedo))
             }
             val ordered = if (horizontal && side == Anchor.END) parts.reversed() else parts
             for (view in ordered) container.addView(view)
@@ -313,7 +313,7 @@ class ToolPalette(
         setPadding(pad, pad, pad, pad)
         val side = boxPx()
         layoutParams = LinearLayout.LayoutParams(side, side)
-        contentDescription = "Tools — tap to open, drag to move"
+        contentDescription = "الأدوات — اضغط للفتح، اسحب للنقل"
         applyDragToggle(this)
     }
 
@@ -357,7 +357,7 @@ class ToolPalette(
         layoutParams = LinearLayout.LayoutParams(side, side).apply {
             val m = spacingPx(TOOL_GAP); setMargins(m, m, m, m)
         }
-        contentDescription = "Collapse / move tools"
+        contentDescription = "طيّ / نقل الأدوات"
         applyDragToggle(this)
     }
 
