@@ -209,7 +209,7 @@ class StylusInkController(private val host: Host) {
     var eraseRadiusPx = ERASE_RADIUS_PX
 
     /** The firmware nib only draws live ink at the default width; other widths are drawn by the app. */
-    val firmwareLive: Boolean get() = host.activeTool == Tool.PEN && penWidthIndex == DEFAULT_PEN_WIDTH_INDEX
+    val firmwareLive: Boolean get() = host.activeTool == Tool.PEN
 
     private fun currentPenWidthPx() = penWidthPx
 
