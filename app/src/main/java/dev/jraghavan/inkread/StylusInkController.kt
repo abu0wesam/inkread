@@ -208,15 +208,13 @@ class StylusInkController(private val host: Host) {
     /** Eraser reach in view px (chosen from [ERASE_SIZES]). */
     var eraseRadiusPx = ERASE_RADIUS_PX
 
-    /** Selected width of the smooth pen (index into [SMOOTH_WIDTHS]). */
-    var smoothWidthIndex = DEFAULT_SMOOTH_INDEX
-    val smoothWidthPx: Float get() = SMOOTH_WIDTHS.getOrElse(smoothWidthIndex) { SMOOTH_WIDTHS[DEFAULT_SMOOTH_INDEX] }
+    /** The firmware nib only draws live ink at the default width; other widths are drawn by the app. */
+    val firmwareLive: Boolean get() = host.activeTool == Tool.PEN && penWidthIndex == DEFAULT_PEN_WIDTH_INDEX
 
-    private fun currentPenWidthPx() = if (host.activeTool == Tool.SMOOTH) smoothWidthPx else penWidthPx
+    private fun currentPenWidthPx() = penWidthPx
 
     private val penPaint = Paint().apply {
         style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND; strokeJoin = Paint.Join.ROUND; isAntiAlias = true
-        pathEffect = android.graphics.CornerPathEffect(SMOOTH_RADIUS_PX)
     }
 
     private fun penLivePaint(): Paint {
@@ -284,7 +282,8 @@ class StylusInkController(private val host: Host) {
                 }
                 // Every tool draws its own live stroke at exactly the width it will be stored with,
                 // so the line does not change thickness when it is saved.
-                host.drawLivePath(strokeBuf, if (host.activeTool == Tool.HIGHLIGHTER) highlighterLivePaint() else penLivePaint())
+                if (host.activeTool == Tool.HIGHLIGHTER) host.drawLivePath(strokeBuf, highlighterLivePaint())
+                else if (!firmwareLive) host.drawLivePath(strokeBuf, penLivePaint())
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                 handler.removeCallbacks(longPress) // lifted before the hold fired → normal stroke
@@ -349,7 +348,8 @@ class StylusInkController(private val host: Host) {
         }
         // Highlighter's firmware EMR ink is suppressed (we drew the live band ourselves), so bake it
         // from the core now. Pen rides the firmware overlay and bakes on the next full render.
-        host.clearFirmwareInk(); host.repaintPanel(); return
+        if (!firmwareLive) { host.clearFirmwareInk(); host.repaintPanel() }
+        return
         // The firmware overlay already shows this stroke live; it bakes from the core on the next
         // full render (page turn / revisit), so no immediate re-blit is needed here.
     }
@@ -369,7 +369,6 @@ class StylusInkController(private val host: Host) {
         path.moveTo(host.nToVx(norm[0]), host.nToVy(norm[1]))
         var i = 2
         while (i + 1 < norm.size) { path.lineTo(host.nToVx(norm[i]), host.nToVy(norm[i + 1])); i += 2 }
-        inkPaint.pathEffect = android.graphics.CornerPathEffect(SMOOTH_RADIUS_PX)
         canvas.drawPath(path, inkPaint)
     }
 
@@ -466,12 +465,6 @@ class StylusInkController(private val host: Host) {
 
         /** Index of the width that matches the firmware nib; see [PEN_WIDTHS]. */
         const val DEFAULT_PEN_WIDTH_INDEX = 2
-
-        /** The smooth pen's widths: 0.1 … 1.0 in even steps, where 1.0 is 20 view pixels. */
-        val SMOOTH_WIDTHS = FloatArray(10) { (it + 1) * 2f }
-        val SMOOTH_NAMES = Array(10) { "%.1f".format(java.util.Locale.US, (it + 1) / 10f) }
-        const val DEFAULT_SMOOTH_INDEX = 3
-        const val SMOOTH_RADIUS_PX = 28f
 
         const val HIGHLIGHT_WIDTH_PX = 30f // wide marker band (vs the pen's PEN_WIDTHS).
         const val ERASE_RADIUS_PX = 22f

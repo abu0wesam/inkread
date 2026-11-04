@@ -156,7 +156,7 @@ class DailyActivity : Activity() {
     private fun utilityRow(): View = LinearLayout(this).apply {
         orientation = LinearLayout.HORIZONTAL
         gravity = Gravity.CENTER_VERTICAL
-        addView(label("‹ Library", 11f, 0.12f).apply { isClickable = true; setOnClickListener { finish() } })
+        addView(label("رجوع إلى المكتبة", 11f, 0.12f).apply { isClickable = true; setOnClickListener { finish() } })
         addView(weighted())
         addView(label("Daily", 11f, 0.12f))
         addView(weighted())

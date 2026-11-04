@@ -148,7 +148,7 @@ class HomeActivity : Activity() {
         val all = dir.listFiles()?.filter { !it.name.startsWith(".") && !it.name.endsWith(".inkread") } ?: emptyList()
         entries = all.filter { it.isDirectory }.sortedBy { it.name.lowercase() } +
             all.filter { isBook(it) }.sortedBy { it.name.lowercase() }
-        crumb.text = "Supernote  >>  " + dir.relativeTo(root.parentFile ?: root).path.replace("/", "  >>  ")
+        crumb.text = "Supernote  ‹  " + dir.relativeTo(root.parentFile ?: root).path.replace("/", "  ‹  ")
         render()
     }
 
@@ -161,13 +161,13 @@ class HomeActivity : Activity() {
         crumb = TextView(this).apply {
             textSize = Ink.sp(20f); typeface = Ink.serifBold; setTextColor(Color.BLACK); maxLines = 1
             ellipsize = android.text.TextUtils.TruncateAt.START
-            textDirection = View.TEXT_DIRECTION_LTR
+            textDirection = View.TEXT_DIRECTION_RTL
             setOnClickListener { onBackPressed() }
         }
         header.addView(
-            TextView(this).apply {
-                text = "→ رجوع"; textSize = Ink.sp(20f); typeface = Ink.serifBold; setTextColor(Color.BLACK)
-                setPadding(dp(14), dp(8), dp(14), dp(8)); setBackgroundResource(android.R.drawable.btn_default_small)
+            android.widget.ImageView(this).apply {
+                setImageResource(R.drawable.ic_menu_back); contentDescription = "رجوع"
+                setPadding(dp(14), dp(10), dp(14), dp(10))
                 setOnClickListener { onBackPressed() }
             },
         )
@@ -243,17 +243,17 @@ class HomeActivity : Activity() {
             if (enabled) setOnClickListener { page = to; render() }
         }
         // RTL: the first control sits at the right edge, so "first" is on the right.
-        pager.addView(btn("⏮", 0, page > 0))
-        pager.addView(btn("◀", page - 1, page > 0))
+        pager.addView(btn("⏭", 0, page > 0))
+        pager.addView(btn("▶", page - 1, page > 0))
         pager.addView(
             TextView(this).apply {
                 text = "${page + 1} / $pages"; textSize = Ink.sp(20f); typeface = Ink.serifBold
                 setTextColor(Color.BLACK); setPadding(dp(18), 0, dp(18), 0)
-                textDirection = View.TEXT_DIRECTION_LTR
+                textDirection = View.TEXT_DIRECTION_RTL
             },
         )
-        pager.addView(btn("▶", page + 1, page < pages - 1))
-        pager.addView(btn("⏭", pages - 1, page < pages - 1))
+        pager.addView(btn("◀", page + 1, page < pages - 1))
+        pager.addView(btn("⏮", pages - 1, page < pages - 1))
     }
 
     private fun cell(f: File, cellW: Int, cellH: Int): View {

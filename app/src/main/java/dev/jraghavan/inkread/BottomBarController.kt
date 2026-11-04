@@ -171,9 +171,9 @@ class BottomBarController(private val host: Host) {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
                 setPadding(Ink.sdp(16), Ink.sdp(12), Ink.sdp(16), Ink.sdp(6))
-                if (host.chapters.isNotEmpty()) addView(chapterBtn("‹‹", -1))
+                if (host.chapters.isNotEmpty()) addView(chapterBtn("››", -1))
                 addView(seek, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-                if (host.chapters.isNotEmpty()) addView(chapterBtn("››", +1))
+                if (host.chapters.isNotEmpty()) addView(chapterBtn("‹‹", +1))
                 addView(pageLabel, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { marginStart = Ink.sdp(12) })
             },
         )
@@ -284,7 +284,7 @@ class BottomBarController(private val host: Host) {
         control(R.drawable.ic_menu_dict, "القواميس") { host.openDicts() }
         // Document controls consolidated into one KOReader-style tabbed sheet (Rotate/Fit/Font/Display).
         control(R.drawable.ic_menu_adjust, "تعديل") { host.openAdjust() }
-        control(R.drawable.ic_menu_flip, if (AppSettings.flipRtl(activity)) "تقليب ←" else "تقليب →") {
+        control(R.drawable.ic_menu_flip, if (AppSettings.flipRtl(activity)) "تقليب →" else "تقليب ←") {
             val rtl = !AppSettings.flipRtl(activity)
             AppSettings.setFlipRtl(activity, rtl)
             android.widget.Toast.makeText(

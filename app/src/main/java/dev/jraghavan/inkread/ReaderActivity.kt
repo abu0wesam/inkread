@@ -613,9 +613,6 @@ class ReaderActivity : Activity(), SurfaceHolder.Callback {
             .getInt(KEY_PEN_WIDTH, StylusInkController.DEFAULT_PEN_WIDTH_INDEX)
             .coerceIn(0, StylusInkController.PEN_WIDTHS.size - 1)
         stylus.eraseRadiusPx = prefs.getFloat("erase_radius", StylusInkController.ERASE_RADIUS_PX)
-        stylus.smoothWidthIndex = prefs
-            .getInt(KEY_SMOOTH_WIDTH, StylusInkController.DEFAULT_SMOOTH_INDEX)
-            .coerceIn(0, StylusInkController.SMOOTH_WIDTHS.size - 1)
         setContentView(root)
     }
 
@@ -1607,11 +1604,6 @@ class ReaderActivity : Activity(), SurfaceHolder.Callback {
                 }.show()
             return true
         }
-        if (chosen == Tool.SMOOTH && tool == Tool.SMOOTH) {
-            if (toolOptions.isShowing()) collapseToolOptions()
-            else openSmoothOptions()
-            return true
-        }
         if (chosen == Tool.PEN && tool == Tool.PEN) {
             if (toolOptions.isShowing()) collapseToolOptions()
             else openPenOptions()
@@ -1663,24 +1655,6 @@ class ReaderActivity : Activity(), SurfaceHolder.Callback {
      * survives a relaunch the way the reader's other typography choices do; strokes already written
      * keep the width they were drawn at, since the core stores width per stroke.
      */
-    private fun openSmoothOptions() {
-        toolOptions.show(
-            "القلم الناعم",
-            PEN_COLORS,
-            PEN_COLOR_NAMES,
-            stylus.penColorIndex,
-            StylusInkController.SMOOTH_WIDTHS,
-            StylusInkController.SMOOTH_NAMES,
-            stylus.smoothWidthIndex,
-            { stylus.penColorIndex = it },
-            {
-                stylus.smoothWidthIndex = it
-                prefs.edit().putInt(KEY_SMOOTH_WIDTH, it).apply()
-            },
-        )
-        postJump(currentPage)
-    }
-
     private fun openPenOptions() {
         toolOptions.show(
             "القلم",
@@ -1694,6 +1668,7 @@ class ReaderActivity : Activity(), SurfaceHolder.Callback {
             {
                 stylus.penWidthIndex = it
                 prefs.edit().putInt(KEY_PEN_WIDTH, it).apply()
+                applyToolInkState("width")
             },
         )
         postJump(currentPage)
@@ -1895,7 +1870,7 @@ class ReaderActivity : Activity(), SurfaceHolder.Callback {
         // setup() re-enables the writable area each call (incl. on focus regain), so re-assert here
         // for every reason. setWritable rides the service_myservice binder (works for a sideloaded
         // app); enableFullUiAuto is SELinux-blocked.
-        val inkWritable = false // every tool draws its own live stroke, at its stored width
+        val inkWritable = tool == Tool.PEN && stylus.firmwareLive
         ink.setWritable(inkWritable)
         Log.i(TAG, "ink claimed ($reason) for $tool: available=$ok writable=$inkWritable")
     }
@@ -2053,7 +2028,6 @@ class ReaderActivity : Activity(), SurfaceHolder.Callback {
         const val PREFS = "inkread"
         const val KEY_BOOK_PATH = "book_path" // stored PDF under app storage (RR27).
         const val KEY_BOOK_ID = "book_id" // stable per-book id (the stored file name).
-        const val KEY_SMOOTH_WIDTH = "smooth_width"
         const val KEY_PEN_WIDTH = "pen_width" // selected pen thickness, an index into PEN_WIDTHS (#199).
         /**
          * The bookmark dog-ear's tap target: the top [BOOKMARK_ZONE_H] of the rightmost

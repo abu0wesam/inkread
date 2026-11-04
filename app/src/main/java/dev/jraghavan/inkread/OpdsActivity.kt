@@ -176,7 +176,7 @@ class OpdsActivity : Activity() {
         }
         if (catalog.next.isNotEmpty()) {
             column.addView(spacer(dp(18)))
-            column.addView(Ink.pillButton(this, "More →", primary = false) { load(catalog.next, pushTrail = true) })
+            column.addView(Ink.pillButton(this, "المزيد ←", primary = false) { load(catalog.next, pushTrail = true) })
         }
     }
 
@@ -224,7 +224,7 @@ class OpdsActivity : Activity() {
      * formats inkread cannot open says so here rather than failing on the tap.
      */
     private fun subtitleFor(entry: OpdsController.Entry): String {
-        if (entry.navigation) return "BROWSE →"
+        if (entry.navigation) return "تصفح ←"
         val best = entry.best
             ?: return "UNSUPPORTED FORMAT" + entry.formats.firstOrNull()?.let { " · ${it.mime}" }.orEmpty()
         // Shared with the shelf so a book reads the same size in both places — and so a 400 KB EPUB

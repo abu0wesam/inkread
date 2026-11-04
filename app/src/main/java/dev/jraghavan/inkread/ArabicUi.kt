@@ -41,13 +41,13 @@ object ArabicUi {
         if (decor.findViewWithTag<android.view.View>("ink_back") != null) return
         val d = a.resources.displayMetrics.density
         decor.addView(
-            android.widget.TextView(a).apply {
-                tag = "ink_back"; text = "→ رجوع"; textSize = Ink.sp(20f); typeface = Ink.serifBold
-                setTextColor(android.graphics.Color.WHITE); setBackgroundColor(android.graphics.Color.BLACK)
-                setPadding((18 * d).toInt(), (10 * d).toInt(), (18 * d).toInt(), (10 * d).toInt())
+            android.widget.ImageView(a).apply {
+                tag = "ink_back"; setImageResource(R.drawable.ic_menu_back); contentDescription = "رجوع"
+                setBackgroundResource(R.drawable.ink_dialog_bg)
+                val p = (12 * d).toInt(); setPadding(p, p, p, p)
                 setOnClickListener { a.onBackPressed() }
             },
-            android.widget.FrameLayout.LayoutParams(-2, -2, android.view.Gravity.BOTTOM or android.view.Gravity.LEFT).apply {
+            android.widget.FrameLayout.LayoutParams((64 * d).toInt(), (64 * d).toInt(), android.view.Gravity.BOTTOM or android.view.Gravity.LEFT).apply {
                 setMargins((16 * d).toInt(), 0, 0, (16 * d).toInt())
             },
         )
